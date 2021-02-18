@@ -11,13 +11,17 @@ sats = ['Sat_A']
 VERSION = '0302'
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
 hdfsuff = '_NOWDAT'
+hdfsuff = '_Anna'
 
 
-y1 = '2013'
-y2 = '2021'
+if hdfsuff == '_NOWDAT':
+    y1 = '2013'
+    y2 = '2021'
+elif hdfsuff == '_Anna':
+    y1 = '2013'
+    y2 = '2014'
 
 PERIOD = '20Min'
-
 
 ##############################
 # F10.7

@@ -154,11 +154,15 @@ for sat in sats:
     fileza = glob(localdir+'*.ZIP')
     fileza.sort()
 
-    for fila in fileza:
+    timeranges = [getCT2HzFileDateRange(os.path.basename(fila)) for fila in fileza]
+
+    for fila,tidrange in zip(fileza,timeranges):
         dirrie = os.path.dirname(fila)+'/'
 
+        if (tidrange[0] < date0) or (tidrange[0] > date1):
+            continue
+
         if havemastertimes:
-            tidrange = getCT2HzFileDateRange(os.path.basename(fila))
 
             if np.sum((mastertimes >= tidrange[0]) & (mastertimes <= tidrange[1])):
                 print(f"Already have {os.path.basename(fila)}! Continue ...")
