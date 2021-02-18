@@ -12,8 +12,33 @@ masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
 wantext = '.ZIP'
 VERSION = '0302'
 
-decimationfactor = 10           # so 5-s resolution
-mlatlowlim = 45
+########################################
+# Define which satellites we'll look for during which years 
+
+mode = 'Annadb'
+
+VALIDMODES = ['fulldb','Annadb']
+
+assert mode in VALIDMODES,"Must choose one of " + ",".join(VALIDMODES)+"!"
+if mode == 'fulldb':
+    hdfsuff = '_NOWDAT'
+    sats = ['Sat_A','Sat_B','Sat_C']
+
+    decimationfactor = 10           # so 5-s resolution
+    mlatlowlim = 45
+
+    date0 = '2013-12-01 00:00:00'
+    date1 = '2021-01-01 00:00:00'
+
+elif mode == 'Annadb':
+    hdfsuff = '_Anna'
+    sats = ['Sat_A']
+
+    decimationfactor = 1           # so full resolution (2 Hz)
+    mlatlowlim = 45
+
+    date0 = '2013-12-01 00:00:00'
+    date1 = '2014-01-01 00:00:00'
 
 ########################################
 # Imports
@@ -42,12 +67,10 @@ from swarmProcHelper import processSwarm2HzCrossTrackZip
 # Define which satellites we'll look for during which years 
 
 sats = ['Sat_A','Sat_B','Sat_C']
-y0,y1 = 2013,2021
-years = [str(val) for val in np.arange(y0,y1)]
 
-date0 = datetime(y0,1,1,0)
-date0 = datetime(2013,12,1,0)
-date1 = datetime(y1,1,1,0)
+date0 = datetime.strptime(date0,"%Y-%m-%d %H:%M:%S")
+date1 = datetime.strptime(date1,"%Y-%m-%d %H:%M:%S")
+
 dates = pd.date_range(start=date0,end=date1,freq='1D')
 dates = [dato.strftime("%Y%m%d") for dato in dates]
 
@@ -87,16 +110,17 @@ else:
     fullext = VERSION + '.ZIP'
 
 apex__geodetic2apexOpts=dict(min_time_resolution__sec=0.5,
-                             max_N_months_twixt_apexRefTime_and_obs=3)
+                             max_N_months_twixt_apexRefTime_and_obs=3,
+                             return_apex_d_basevecs=True)  # Need these for getting flow in Apex coordinates
 ########################################
 # Download!
 for sat in sats:
 
-    if sat == sats[0]:
-        print("Already have Swarm A. Continue!")
-        continue
+    # if sat == sats[0]:
+    #     print("Already have Swarm A. Continue!")
+    #     continue
 
-    masterhdf = sat+f'_ct2hz_v{VERSION}_NOWDAT.h5'
+    masterhdf = sat+f'_ct2hz_v{VERSION}{hdfsuff}.h5'
 
     localdir = DownloadDir+'/'.join([sat.replace('Sat_','Swarm_'),''])
     if not os.path.exists(localdir):
@@ -155,7 +179,8 @@ for sat in sats:
             df.sort_index(inplace=True)
             
             # Decimation 
-            df = df.iloc[::decimationfactor]
+            if decimationfactor > 1:
+                df = df.iloc[::decimationfactor]
 
 
             # print("Adding Apex coords")

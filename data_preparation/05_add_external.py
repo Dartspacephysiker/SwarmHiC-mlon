@@ -10,6 +10,7 @@ datapath = '/SPENCEdata/Research/database/SHEIC/'
 sats = ['Sat_A']
 VERSION = '0302'
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
+hdfsuff = '_NOWDAT'
 
 
 y1 = '2013'
@@ -42,7 +43,8 @@ f107 = f107[f107.index >= pd.Timestamp(y1+'-01-01')]
 
 omnicols = dict(bz = 'BZ_GSM',
                 by = 'BY_GSM',
-                vx = 'Vx')
+                vx = 'Vx',
+                nsw='proton_density')
 with pd.HDFStore(datapath + 'omni_1min.h5', 'r') as omni:
     # ORIG
     # Bz = omni['/omni'][omnicols['bz']][y1:y2].rolling(PERIOD).mean()
@@ -55,9 +57,10 @@ with pd.HDFStore(datapath + 'omni_1min.h5', 'r') as omni:
     Bz = external[omnicols['bz']][y1:y2].rolling(PERIOD).mean()
     By = external[omnicols['by']][y1:y2].rolling(PERIOD).mean()
     vx = external[omnicols['vx']][y1:y2].rolling(PERIOD).mean()
+    nsw = external[omnicols['nsw']][y1:y2].rolling(PERIOD).mean()
 
-external = pd.DataFrame([Bz, By, vx]).T
-external.columns = ['Bz', 'By', 'vx']
+external = pd.DataFrame([Bz, By, vx, nsw]).T
+external.columns = ['Bz', 'By', 'vx', 'nsw']
 external = external.dropna()
 
 # calculate tilt
@@ -94,7 +97,7 @@ for key,val in f107cols.items():
 for sat in sats:
     print(sat)
 
-    masterhdf = sat+f'_ct2hz_v{VERSION}_NOWDAT.h5'
+    masterhdf = sat+f'_ct2hz_v{VERSION}{hdfsuff}.h5'
 
     print(masterhdf)
 
