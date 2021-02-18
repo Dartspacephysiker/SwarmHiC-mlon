@@ -12,7 +12,7 @@ from datetime import datetime
 from pytt.earth import geodesy
 from pyamps.mlt_utils import mlon_to_mlt
 
-storefn = '/Users/laundal/Dropbox/data/space/LEO/data_v1_update.h5'
+storefn = '/SPENCEdata/Research/database/SHEIC/data_v1_update.h5'
 
 Re = 6371.009 # mean radius of the Earth from Emmert et al. 
 
@@ -20,8 +20,7 @@ Re = 6371.009 # mean radius of the Earth from Emmert et al.
 final_columns = ['h', 'qdlon', 'alat110', 'qdlat', 'mlt', 'Be', 'Bn', 'Bu', 'f1e', 'f1n', 'f2e', 'f2n', 'd1e', 'd1n', 'd2e', 'd2n']
 
 
-
-for satellite in ['CHAMP', 'SwarmA', 'SwarmB', 'SwarmC']:
+for satellite in ['SwarmA', 'SwarmB', 'SwarmC']:
     with pd.HDFStore(storefn, mode = 'r') as store:
          indata = store[satellite + '/raw_data']
 
