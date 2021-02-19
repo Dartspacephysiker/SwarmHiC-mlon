@@ -45,6 +45,7 @@ VERSION = '0302'
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
 hdfsuff = '_NOWDAT'
 hdfsuff = '_Anna'
+hdfsuff = '_Anna2'
 
 OMNIPERIOD = '20Min'
 
@@ -188,3 +189,90 @@ for it,t in enumerate(times):
 with pd.HDFStore(masterhdfdir+masterhdf, 'a') as store:
     for column in ['ViyWeimer_d1','ViyWeimer_d2']:
         store.append(column, df[column], format='t')
+
+# goodinds = np.isfinite(df['Viy_d2']) & np.isfinite(df['ViyWeimer_d2'])
+
+# goodinds = np.isfinite(df['Viy_d2']) & np.isfinite(df['ViyWeimer_d2']) & (df['Quality_flags'] == 4)
+
+
+assert df.index.is_monotonic
+
+deltats = np.diff(df.index)/np.timedelta64(1)/1e9
+shpasses = np.ma.clump_unmasked(np.ma.masked_greater(df['mlat'].values,-45))
+nhpasses = np.ma.clump_unmasked(np.ma.masked_less(df['mlat'].values,45))
+
+########################################
+# MPL stuff
+import matplotlib as mpl
+import tkinter
+mplBkgrnd = 'TkAgg'
+mpl.use(mplBkgrnd)
+mpl.rcParams.update({'text.color': 'k'})
+mpl.rcParams.update({'axes.labelcolor': 'k'})
+mpl.rcParams.update({'xtick.color': 'k'})
+mpl.rcParams.update({'ytick.color': 'k'})
+mpl.rcParams.update({'font.size': 15})
+mpl.rcParams.update({'font.family': 'sans-serif'})
+mpl.rcParams.update({'font.sans-serif': 'Arial'})
+mpl.rcParams.update({'text.usetex': False})
+
+mpl.rcParams.update({'figure.figsize': [10.0, 8.0]})
+# mpl.rcParams.update({'savefig.directory': plotdir})
+
+import matplotlib.pyplot as plt
+plt.ion()
+
+# fig,ax = plt.subplots(1,1); ax.hist2d(df[goodinds]['Viy_d1'],df[goodinds]['ViyWeimer_d1'],bins=[np.arange(-2000,2001,50),np.arange(-1500,1501,50)])
+
+# fig,ax = plt.subplots(1,1); ax.hist2d(df[goodinds]['Viy_d1'],df[goodinds]['ViyWeimer_d1'],
+#                                       bins=[np.arange(-2000,2001,50),
+#                                             np.arange(-1500,1501,50)],
+#                                       # cmax=5000,
+#                                       norm=mpl.colors.LogNorm())
+# ax.set_aspect('equal')
+
+# fig,ax = plt.subplots(1,1); ax.scatter(df[goodinds]['Viy_d1'],df[goodinds]['ViyWeimer_d1'],marker='.',alpha=0.05)
+# ax.set_xlim((-2500,2500))
+
+# try polarsub
+import DAG.src.pysymmetry.visualization.polarsubplot
+import importlib
+importlib.reload(DAG.src.pysymmetry.visualization.polarsubplot)
+from DAG.src.pysymmetry.visualization.polarsubplot import Polarsubplot
+plottrack_kws = dict(marker='.',SCALE=500,markercolor='blue',color='blue',markersize=10)
+WEIMER_kws = dict(marker='.',SCALE=500,markercolor='red',color='red',markersize=10)
+
+def showhim(showtime0,timedelta=pd.Timedelta('20 min')):
+
+    showtime1 = showtime0 + timedelta
+    showinds = (df.index >= showtime0) & (df.index <= showtime1)
+
+    fig = plt.figure(figsize=(15,9))
+    ax = fig.add_subplot(1,1,1)
+    # _ = ax.set_title(plottitle)
+    
+    # _ = fig.suptitle(plottitle)
+    
+    pax = Polarsubplot(ax,
+                       minlat = 45,
+                       linestyle="-",
+                       linewidth = 1,
+                       color = "lightgrey")
+    _ = pax.plot(df[showinds]['mlat'].values,
+                 df[showinds]['mlt'].values,
+                 color='black',
+                 alpha=1.0,
+                 linestyle='--')
+    # if doMagComponents:
+    pax.plottrack(df[showinds]['mlat'].values,
+                  df[showinds]['mlt'].values,
+                  df[showinds]['Viy_d2'].values*(-1),
+                  df[showinds]['Viy_d1'].values,**plottrack_kws)
+    
+    _ = pax.plottrack(df[showinds]['mlat'].values,
+                      df[showinds]['mlt'].values,
+                      df[showinds]['ViyWeimer_d2'].values*(-1),
+                      df[showinds]['ViyWeimer_d1'].values,
+                      **WEIMER_kws)
+
+showtime0 = pd.Timestamp('2016-01-28 10:50:00'); showhim(showtime0,timedelta=pd.Timedelta('30 min'))

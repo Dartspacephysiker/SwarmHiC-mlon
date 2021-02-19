@@ -12,6 +12,7 @@ VERSION = '0302'
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
 hdfsuff = '_NOWDAT'
 hdfsuff = '_Anna'
+hdfsuff = '_Anna2'
 
 
 if hdfsuff == '_NOWDAT':
@@ -20,6 +21,10 @@ if hdfsuff == '_NOWDAT':
 elif hdfsuff == '_Anna':
     y1 = '2013'
     y2 = '2014'
+elif hdfsuff == '_Anna2':
+    y1 = '2016'
+    y2 = '2016'
+
 
 PERIOD = '20Min'
 
