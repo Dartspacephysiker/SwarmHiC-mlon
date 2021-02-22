@@ -16,8 +16,9 @@ VERSION = '0302'
 # Define which satellites we'll look for during which years 
 
 mode = 'Annadb2'
+mode = '2014'
 
-VALIDMODES = ['fulldb','Annadb','Annadb2']
+VALIDMODES = ['fulldb','Annadb','Annadb2','2014']
 
 assert mode in VALIDMODES,"Must choose one of " + ",".join(VALIDMODES)+"!"
 if mode == 'fulldb':
@@ -49,6 +50,16 @@ elif mode == 'Annadb2':
 
     date0 = '2016-01-25 00:00:00'
     date1 = '2016-02-01 00:00:00'
+
+elif mode == '2014':
+    hdfsuff = '_2014'
+    sats = ['Sat_A']
+
+    decimationfactor = 1           # so full resolution (2 Hz)
+    mlatlowlim = 45
+
+    date0 = '2013-12-01 00:00:00'
+    date1 = '2014-12-31 23:59:59'
 
 ########################################
 # Imports

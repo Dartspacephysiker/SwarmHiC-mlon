@@ -105,13 +105,19 @@ def showhimscatter(df,showinds,
                    #showtime0,timedelta=pd.Timedelta('20 min'),
                    norm=None):
     
-    goodinds = np.isfinite(df['Viy_d2']) & np.isfinite(df['ViyWeimer_d2']) & (df['Quality_flags'] == 4)
-    if showinds is None:
+    goodinds = np.isfinite(df['Viy_d1']) & np.isfinite(df['ViyWeimer_d1']) \
+        & df['Viy_d2']) & np.isfinite(df['ViyWeimer_d2']) \
+        & (df['Quality_flags'] == 4)
+    # if showinds is None:
 
-        showtime1 = showtime0 + timedelta
-        showinds = (df.index >= showtime0) & (df.index <= showtime1) & goodinds
+    #     showtime1 = showtime0 + timedelta
+    #     showinds = (df.index >= showtime0) & (df.index <= showtime1) & goodinds
 
     showinds = showinds & goodinds
+
+    if np.sum(showinds) == 0:
+        print("No indices! Returning ...")
+        return
 
     fig,axes = plt.subplots(1,2,figsize=(16,9),sharex=True,sharey=True);
     _ = axes[0].hist2d(df[showinds]['Viy_d1'],
