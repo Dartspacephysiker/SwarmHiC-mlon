@@ -89,7 +89,10 @@ def getinds(df,lilslice,only_calibrated=True):
 
 def showhim(df,showinds,sat='Sat_A',
             northcol='Viy_d2',
-            eastcol='Viy_d1'):#,
+            eastcol='Viy_d1',
+            fig=None,
+            ax=None,
+            pax=None):#,
             # showtime0,timedelta=pd.Timedelta('20 min'),
             # showinds=None):
 
@@ -102,43 +105,64 @@ def showhim(df,showinds,sat='Sat_A',
         print("No indices! Returning ...")
         return
 
-    fig = plt.figure(figsize=(10,9))
-    ax = fig.add_subplot(1,1,1)
-    # _ = ax.set_title(plottitle)
-
-    # _ = fig.suptitle(plottitle)
-
     t0 = df[showinds].index[0]
     t1 = df[showinds].index[-1]
     hemi = 'NH' if ((df[showinds]['mlat']/np.abs(df[showinds]['mlat'])).median() > 0) else 'SH'
     titlestr = f"{sat.replace('Sat_','Swarm ')}, {hemi}\n[{t0.strftime('%Y-%m-%d %H:%M:%S')}, {t1.strftime('%Y-%m-%d %H:%M:%S')}]"
     print(titlestr)
-    _ = ax.set_title(titlestr)
 
     multfac_d2 = -1 if (hemi == 'NH') else 1
     multfac_d2 = -1
 
-    pax = Polarsubplot(ax,
-                       minlat = 45,
-                       linestyle="-",
-                       linewidth = 1,
-                       color = "lightgrey")
-    _ = pax.plot(df[showinds]['mlat'].values,
-                 df[showinds]['mlt'].values,
-                 color='black',
-                 alpha=1.0,
-                 linestyle='--')
+    needfig = fig is None
+    needax = (ax is None) or needfig
+    needpax = (pax is None) or needax
+
+    outputlist = []
+    if needfig:
+        fig = plt.figure(figsize=(10,9))
+        outputlist.append(fig)
+
+    if needax:
+
+        ax = fig.add_subplot(1,1,1)
+        # _ = ax.set_title(plottitle)
+
+        # _ = fig.suptitle(plottitle)
+
+        outputlist.append(ax)
+
+    if needax or needpax:
+        pax = Polarsubplot(ax,
+                           minlat = 45,
+                           linestyle="-",
+                           linewidth = 1,
+                           color = "lightgrey")
+
+        outputlist.append(pax)
+
+    _ = ax.set_title(titlestr)
+
+    trackplot = pax.plot(df[showinds]['mlat'].values,
+                         df[showinds]['mlt'].values,
+                         color='black',
+                         alpha=1.0,
+                         linestyle='--')
     # if doMagComponents:
-    pax.plottrack(df[showinds]['mlat'].values,
+    convecplot = pax.plottrack(df[showinds]['mlat'].values,
                   df[showinds]['mlt'].values,
                   df[showinds][northcol].values*(multfac_d2),
                   df[showinds][eastcol].values,**plottrack_kws)
 
-    _ = pax.plottrack(df[showinds]['mlat'].values,
+    convecweimerplot = pax.plottrack(df[showinds]['mlat'].values,
                       df[showinds]['mlt'].values,
                       df[showinds]['ViyWeimer_d2'].values*(multfac_d2),
                       df[showinds]['ViyWeimer_d1'].values,
                       **WEIMER_kws)
+
+    outputlist.append((trackplot,convecplot,convecweimerplot))
+    
+    return outputlist
 
 
 def showhimscatter(df,showinds,
@@ -216,3 +240,30 @@ def smooth_df_Viy(df,window='10 s',center=False):
     #     dfcopy['Viy_d1roll'] = dfcopy['Viy_d1'].rolling(window).mean()
     #     dfcopy['Viy_d2roll'] = dfcopy['Viy_d2'].rolling(window).mean()
         
+def get_highfreq(df):
+    df['Viy_d1hf'] = df['Viy_d1']-df['Viy_d1roll']
+    df['Viy_d2hf'] = df['Viy_d2']-df['Viy_d2roll']
+
+getinds(df,nhpasses[22])
+def make_smoothplots(df,showinds,
+                     smoothtimes=[10,20,30,60,120],
+                     northcol='Viy_d2roll',
+                     eastcol='Viy_d1roll'):
+    first = True
+    for smootht in smoothtimes:
+        
+        smooth_df_Viy(df,window=str(smootht)+' s',center=True);
+        if first:
+            fig,ax,pax,plots = showhim(df,showinds,
+                                       northcol=northcol,
+                                       eastcol=eastcol)
+            first = False
+
+        else:
+            plots = showhim(df,getinds(df,showinds,
+                            northcol=northcol,
+                            eastcol=eastcol,
+                            fig=fig,
+                            ax=ax,
+                            pax=pax)
+

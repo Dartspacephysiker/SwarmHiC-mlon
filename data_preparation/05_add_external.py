@@ -10,13 +10,13 @@ datapath = '/SPENCEdata/Research/database/SHEIC/'
 sats = ['Sat_A']
 VERSION = '0302'
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
-hdfsuff = '_NOWDAT'
+hdfsuff = '_5sres'
 hdfsuff = '_Anna'
 hdfsuff = '_Anna2'
 hdfsuff = '_2014'
 
 
-if hdfsuff == '_NOWDAT':
+if hdfsuff == '_5sres':
     y1 = '2013'
     y2 = '2021'
 elif hdfsuff == '_Anna':

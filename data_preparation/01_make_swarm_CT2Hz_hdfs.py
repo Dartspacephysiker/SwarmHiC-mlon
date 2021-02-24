@@ -22,7 +22,7 @@ VALIDMODES = ['fulldb','Annadb','Annadb2','2014']
 
 assert mode in VALIDMODES,"Must choose one of " + ",".join(VALIDMODES)+"!"
 if mode == 'fulldb':
-    hdfsuff = '_NOWDAT'
+    hdfsuff = '_5sres'
     sats = ['Sat_A','Sat_B','Sat_C']
 
     decimationfactor = 10           # so 5-s resolution

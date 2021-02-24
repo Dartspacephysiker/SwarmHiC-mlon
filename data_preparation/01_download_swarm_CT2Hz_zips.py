@@ -54,6 +54,7 @@ def get_remote_swarm_ct2hz_dir(*args):
         paf = 'New_baseline'
     else:
         paf = 'Old_baseline'
+        assert 2<1,"Can't do old calibrations! FTP hasn't worked for some time now (20210224), and current implementation only downloads new files ..."
     # year = args[1]
     return BaseAddr + '/'.join([paf,sat,''])
 
@@ -155,49 +156,119 @@ else:
 # Download!
 for sat in sats:
 
-    masterhdf = sat+f'_ct2hz_v{VERSION}.h5'
+    print(sat)
+
+    # masterhdf = sat+f'_ct2hz_v{VERSION}.h5'
 
     localdir = DownloadDir+'/'.join([sat.replace('Sat_','Swarm_'),''])
     if not os.path.exists(localdir):
         print(f"Making {localdir}")
         os.makedirs(localdir)
 
-    print(masterhdf)
+    # print(masterhdf)
 
     # for year in years:
     curIterStr = f"{sat}-{VERSION}"
 
-    opts_hurtigLast = dict(FP__doCorrectTimestamps=False,
-                           FP__doResample=False,
-                           dont_touch_data=False,
-                           dontInterp__justMag=False,
-                           doDebug=False,
-                           overwrite_existing=False,
-                           use_existing=True,
-                           removeCDF=True,
-                           resampleString='500ms',
-                           customSaveSuff='',
-                           make_pickles=False)
+    # opts_hurtigLast = dict(FP__doCorrectTimestamps=False,
+    #                        FP__doResample=False,
+    #                        dont_touch_data=False,
+    #                        dontInterp__justMag=False,
+    #                        doDebug=False,
+    #                        overwrite_existing=False,
+    #                        use_existing=True,
+    #                        removeCDF=True,
+    #                        resampleString='500ms',
+    #                        customSaveSuff='',
+    #                        make_pickles=False)
 
-    dads = get_Swarm_combo(dates,
-                           sat=sat.replace('Sat_',''),
-                           get_dtypes=['CT2HZ'],
-                           dtype__add_Apex=['CT2HZ'],
-                           apex__geodetic2apexOpts=dict(min_time_resolution__sec=0.5,
-                                                        max_N_months_twixt_apexRefTime_and_obs=3),
-                           localSaveDir='/media/spencerh/data/Swarm/',
-                           # check_for_existing_funcDict=dict(),
-                           removeDownloadedZipAfterProcessing=False,
-                           useKallesHardDrive=False,
-                           only_download_zips=True,
-                           only_list=False,
-                           only_remove_zips=False,
-                           opts_hurtigLast=opts_hurtigLast)
+    # dads = get_Swarm_combo(dates,
+    #                        sat=sat.replace('Sat_',''),
+    #                        get_dtypes=['CT2HZ'],
+    #                        dtype__add_Apex=['CT2HZ'],
+    #                        apex__geodetic2apexOpts=dict(min_time_resolution__sec=0.5,
+    #                                                     max_N_months_twixt_apexRefTime_and_obs=3),
+    #                        localSaveDir='/media/spencerh/data/Swarm/',
+    #                        # check_for_existing_funcDict=dict(),
+    #                        removeDownloadedZipAfterProcessing=False,
+    #                        useKallesHardDrive=False,
+    #                        only_download_zips=True,
+    #                        only_list=False,
+    #                        only_remove_zips=False,
+    #                        opts_hurtigLast=opts_hurtigLast)
 
+    ########################################
+    ########################################
+    # SINCE FTP DOESN'T WORK, TRY THIS
+
+    # Read in manually snatched list of files
+
+    print("20210224 Even my new wget-based method doesn't work. The FTP site seems to hate me now, and I don't know why.")
+
+    import wget
+    from glob import glob
+    filelistdir = '/SPENCEdata/Research/SHEIC/filelists/'
+
+    swarmFTPAddr = "swarm-diss.eo.esa.int"
+    subfolder = 'New_baseline' 
+
+    sattie = sat.replace('Sat_','')
+    flist = glob(filelistdir+f'{sattie}*.txt')
+
+    assert len(flist) == 1
+
+    with open(flist[0]) as f:
+        flist = f.read().splitlines()
+
+    todownload = []
+    for f in flist:
+        # print(f,end=' ')
+        if os.path.exists(localdir+f):
+
+            if os.path.getsize(localdir+f) < 900: # in bytes
+                print(f"{f} is teensy-weensy! Removing and downloading again ...")
+                os.remove(localdir+f)    
+            else:
+                # print("Skipping!")
+                continue
+
+        # print(f"Adding {f}")
+        todownload.append(f)
+    
+    if len(todownload) == 0:
+        print(f"Already have all files for {sat}. Continuing ...")
+        continue
+
+    cont = False
+    while not cont:
+        response = input(f"Going to download {len(todownload)} files. Sound OK? [y/n/(s)how me]")
+        if len(response) == 0:
+            continue
+        response = response.lower()[0]
+        cont = response in ['y','n']
+        
+        if not cont:
+            if response == 's':
+                [print(f) for f in todownload]
+            else:
+                print("Invalid. Say 'yes' or 'no'")
+
+    if response == 'n':
+        print("OK, skipping ...")
+        continue
+
+    print("Downloading!")
+
+    subDir = f'/Advanced/Plasma_Data/2Hz_TII_Cross-track_Dataset/{subfolder:s}/Sat_{sattie:s}/'
+
+    for ftpFile in todownload:
+        print(f"Downloading {ftpFile}")
+        wget.download('ftp://'+swarmFTPAddr+subDir+ftpFile,localdir+ftpFile)
+        # print(f"Would run this: wget.download('{'ftp://'+swarmFTPAddr+subDir+ftpFile,localdir+ftpFile}')")
     
 
     # break
-# TMPVREAK
+    # TMPVREAK
 
     # dads = dads[0]             # stupid nested list ...
     # dads = [os.path.basename(dad) for dad in dads]
