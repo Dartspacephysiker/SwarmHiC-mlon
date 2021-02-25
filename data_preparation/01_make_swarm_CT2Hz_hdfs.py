@@ -17,13 +17,17 @@ VERSION = '0302'
 
 mode = 'Annadb2'
 mode = '2014'
+mode = 'fulldb'
 
 VALIDMODES = ['fulldb','Annadb','Annadb2','2014']
+
+# sats = ['Sat_A','Sat_B','Sat_C']
+# sats = ['Sat_A']
+sats = ['Sat_B','Sat_C']
 
 assert mode in VALIDMODES,"Must choose one of " + ",".join(VALIDMODES)+"!"
 if mode == 'fulldb':
     hdfsuff = '_5sres'
-    sats = ['Sat_A','Sat_B','Sat_C']
 
     decimationfactor = 10           # so 5-s resolution
     mlatlowlim = 45
@@ -33,7 +37,6 @@ if mode == 'fulldb':
 
 elif mode == 'Annadb':
     hdfsuff = '_Anna'
-    sats = ['Sat_A']
 
     decimationfactor = 1           # so full resolution (2 Hz)
     mlatlowlim = 45
@@ -43,7 +46,6 @@ elif mode == 'Annadb':
 
 elif mode == 'Annadb2':
     hdfsuff = '_Anna2'
-    sats = ['Sat_A']
 
     decimationfactor = 1           # so full resolution (2 Hz)
     mlatlowlim = 45
@@ -53,7 +55,6 @@ elif mode == 'Annadb2':
 
 elif mode == '2014':
     hdfsuff = '_2014'
-    sats = ['Sat_A']
 
     decimationfactor = 1           # so full resolution (2 Hz)
     mlatlowlim = 45
@@ -86,8 +87,6 @@ from swarmProcHelper import processSwarm2HzCrossTrackZip
 
 ########################################
 # Define which satellites we'll look for during which years 
-
-sats = ['Sat_A','Sat_B','Sat_C']
 
 date0 = datetime.strptime(date0,"%Y-%m-%d %H:%M:%S")
 date1 = datetime.strptime(date1,"%Y-%m-%d %H:%M:%S")
