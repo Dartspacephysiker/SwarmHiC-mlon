@@ -22,8 +22,8 @@ mode = 'fulldb'
 VALIDMODES = ['fulldb','Annadb','Annadb2','2014']
 
 # sats = ['Sat_A','Sat_B','Sat_C']
-# sats = ['Sat_A']
-sats = ['Sat_B','Sat_C']
+sats = ['Sat_A']
+# sats = ['Sat_B','Sat_C']
 
 assert mode in VALIDMODES,"Must choose one of " + ",".join(VALIDMODES)+"!"
 if mode == 'fulldb':
