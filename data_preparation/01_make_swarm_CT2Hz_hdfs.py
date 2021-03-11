@@ -17,19 +17,30 @@ VERSION = '0302'
 
 mode = 'Annadb2'
 mode = '2014'
-mode = 'fulldb'
+mode = 'fulldb_5sres'
+mode = 'fulldb_1sres'
 
-VALIDMODES = ['fulldb','Annadb','Annadb2','2014']
+VALIDMODES = ['fulldb_5sres','fulldb_1sres','Annadb','Annadb2','2014']
 
 # sats = ['Sat_A','Sat_B','Sat_C']
 sats = ['Sat_A']
 # sats = ['Sat_B','Sat_C']
 
 assert mode in VALIDMODES,"Must choose one of " + ",".join(VALIDMODES)+"!"
-if mode == 'fulldb':
+
+if mode == 'fulldb_5sres':
     hdfsuff = '_5sres'
 
     decimationfactor = 10           # so 5-s resolution
+    mlatlowlim = 45
+
+    date0 = '2013-12-01 00:00:00'
+    date1 = '2021-01-01 00:00:00'
+
+if mode == 'fulldb_1sres':
+    hdfsuff = '_1sres'
+
+    decimationfactor = 2           # so 1-s resolution
     mlatlowlim = 45
 
     date0 = '2013-12-01 00:00:00'
@@ -65,7 +76,6 @@ elif mode == '2014':
 ########################################
 # Imports
 
-from bs4 import BeautifulSoup
 import cdflib
 from datetime import datetime 
 import numpy as np

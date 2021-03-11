@@ -3,9 +3,93 @@ import dask.array as da
 import gc
 d2r = np.pi/180
 
-
-
 REFRE = 6372.
+
+import pandas as pd
+import numpy as np
+
+def konveksjonsdatabase(sat,bare_substorm=False,
+                        datadir='/SPENCEdata/Research/database/SHEIC/',
+                        include_satellite_NEC_vectors=False,
+                        min_quality=0):
+    #%%
+    #Laste inn pakker, velge satellitt
+    
+    hdffile = f'Sat_{sat}_ct2hz_v0302_5sres.h5'
+    
+    #%%
+    #Se HDFs innehold
+    
+    # print(f"Opening {hdffile}")
+    # with pd.HDFStore(datadir+hdffile,'r') as store:
+    #     print(store.keys())
+    #     print("'/external' member contains:")
+    #     print(store['/external'].columns)
+        
+    # Alle kolonner
+    # ['/Bx', '/By', '/Bz',
+    #  '/Ehx', '/Ehy', '/Ehz',
+    #  '/Evx', '/Evy', '/Evz',
+    #  '/Latitude', '/Longitude', '/Radius', 
+    #  '/MLT', '/QDLatitude',
+    #  '/Quality_flags',
+    #  '/Vicrx', '/Vicry', '/Vicrz',
+    #  '/Vixh', '/Vixh_error',
+    #  '/Vixv', '/Vixv_error',
+    #  '/Viy', '/Viy_d1', '/Viy_d2', '/Viy_error',
+    #  '/Viz', '/Viz_error',
+    #  '/VsatC', '/VsatE', '/VsatN',
+    #  '/alt',
+    #  '/d10', '/d11', '/d12', '/d20', '/d21', '/d22', '/d30', '/d31', '/d32',
+    #  '/external',
+    #  --> contains SW/substorm/tilt/F10.7: ['Bz', 'By', 'vx', 'nsw', 'f107obs', 'f107adj', 'tilt',
+    #                                        'onset_dt_minutes', 'onset_mlat', 'onset_mlt']
+    #  '/gdlat',
+    #  '/mlat', '/mlon', '/mlt',
+    #  '/yhat_d1', '/yhat_d2']    
+
+    #%%
+    #Velge ut noen kolonner og lage en DataFrame
+    getcols = ['/mlt','/mlat','/alt','/yhat_d1','/yhat_d2','/Viy_d1','Viy_d2','/Quality_flags']
+    if include_satellite_NEC_vectors:
+        getcols += ['/VsatN', '/VsatE', '/VsatC']
+    getallextcols = True
+    
+    df = pd.DataFrame()
+    with pd.HDFStore(datadir+hdffile,'r') as store:
+        print("Getting these columns: "+", ".join(getcols)+' ...',end='')
+        for col in getcols:
+            df[col.replace('/','')] = store[col]
+        print("Done!")
+    
+        if getallextcols:
+            print("Getting solar wind, IMF, dipoletilt, F10.7, and substorm data ...",end='')
+    
+            df = df.join(store['/external'])
+            dfcols = list(df.columns)
+            renamecols = dict(Bz='IMFBz',By='IMFBy')
+            for key,rcol in renamecols.items():
+                dfcols[np.where([key == col for col in dfcols])[0][0]] = rcol
+            df.columns = dfcols
+            print("Done!")
+    #%%
+    #Fjerne alle rader som ikke har Quality_flags >= 4 (disse er dårlig kalibrert)
+    if min_quality > 0:
+        print(f"Junking data with Quality_flags < {min_quality} ... ",end='')
+        N = df.shape[0]
+        good = df['Quality_flags'] >= min_quality
+        df = df[good]
+        print(f"Junked {N - df.shape[0]} rows and kept {df.shape[0]}")
+    
+    if bare_substorm:
+        print("Only keeping rows associated with finite substorm onset parameters ...",end='')
+        N = df.shape[0]
+        good = np.isfinite(df['onset_mlt'])
+        df = df[good]
+        print(f"Junked {N - df.shape[0]} rows and kept {df.shape[0]}") 
+
+        
+    return df
 
 
 class SHkeys(object):
