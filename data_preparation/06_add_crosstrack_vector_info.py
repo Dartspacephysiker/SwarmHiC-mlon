@@ -15,6 +15,7 @@ sats = ['Sat_A']
 # sats = ['Sat_B','Sat_C']
 VERSION = '0302'
 hdfsuff = '_5sres'
+hdfsuff = '_1sres'
 # hdfsuff = '_Anna'
 # hdfsuff = '_Anna2'
 # hdfsuff = '_2014'

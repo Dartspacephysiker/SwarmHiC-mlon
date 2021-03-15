@@ -26,6 +26,9 @@ hdfsuff = '_1sres'
 if hdfsuff == '_5sres':
     y1 = '2013'
     y2 = '2021'
+if hdfsuff == '_1sres':
+    y1 = '2013'
+    y2 = '2021'
 elif hdfsuff == '_Anna':
     y1 = '2013'
     y2 = '2014'
