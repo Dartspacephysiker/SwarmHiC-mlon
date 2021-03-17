@@ -11,7 +11,7 @@ Weimer_update_dt = '180 s'  # How often should we update the Weimer model?
 maxtdiff_between_wanttime_and_omni = pd.Timedelta('2 min')
 
 # sats = ['Sat_A','Sat_B','Sat_C']
-sats = ['Sat_A']
+sats = ['Sat_B']
 # sats = ['Sat_B','Sat_C']
 VERSION = '0302'
 hdfsuff = '_5sres'

@@ -11,12 +11,22 @@ import numpy as np
 def konveksjonsdatabase(sat,bare_substorm=False,
                         datadir='/SPENCEdata/Research/database/SHEIC/',
                         include_satellite_NEC_vectors=False,
-                        min_quality=0):
+                        stride=1,
+                        min_quality=0,
+                        for_fitting_Efield=True,
+                        res_1s=False):
     #%%
     #Laste inn pakker, velge satellitt
     
     hdffile = f'Sat_{sat}_ct2hz_v0302_5sres.h5'
     
+    if res_1s:
+        print("1-s convection data ...")
+        hdffile = hdffile.replace('5sres','1sres')
+
+    if stride != 1:
+        print(f"Decimating data by a factor of {stride}")
+
     #%%
     #Se HDFs innehold
     
@@ -53,19 +63,36 @@ def konveksjonsdatabase(sat,bare_substorm=False,
     getcols = ['/mlt','/mlat','/alt','/yhat_d1','/yhat_d2','/Viy_d1','Viy_d2','/Quality_flags']
     if include_satellite_NEC_vectors:
         getcols += ['/VsatN', '/VsatE', '/VsatC']
+
+    if for_fitting_Efield:
+        getcols += ['/Viy','/Ehx','/Ehy','/gdlat','/Longitude','/Bx', '/By', '/Bz']
+
     getallextcols = True
     
     df = pd.DataFrame()
     with pd.HDFStore(datadir+hdffile,'r') as store:
         print("Getting these columns: "+", ".join(getcols)+' ...',end='')
         for col in getcols:
-            df[col.replace('/','')] = store[col]
+            if stride != 1:
+                df[col.replace('/','')] = store[col][::stride]
+            else:
+                df[col.replace('/','')] = store[col]
+
+        if for_fitting_Efield:
+            print("Calculating B-field magnitude (in T, not nT!) and dropping measured Bx, By, and Bz ... ",end='')
+            df['B'] = np.sqrt(df['Bx']**2+df['By']**2+df['Bz']**2)*1e-9
+            df = df.drop(['Bx','By','Bz'],axis=1)
+
         print("Done!")
     
         if getallextcols:
             print("Getting solar wind, IMF, dipoletilt, F10.7, and substorm data ...",end='')
     
-            df = df.join(store['/external'])
+            if stride != 1:
+                df = df.join(store['/external'][::stride])
+            else:
+                df = df.join(store['/external'])
+
             dfcols = list(df.columns)
             renamecols = dict(Bz='IMFBz',By='IMFBy')
             for key,rcol in renamecols.items():

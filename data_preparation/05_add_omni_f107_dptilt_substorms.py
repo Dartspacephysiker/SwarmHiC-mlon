@@ -12,7 +12,7 @@ ss_maxdt_tolerance = '30 min'
 
 # sats = ['Sat_A','Sat_B','Sat_C']
 # sats = ['Sat_B','Sat_C']
-sats = ['Sat_A']
+sats = ['Sat_B']
 
 VERSION = '0302'
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
