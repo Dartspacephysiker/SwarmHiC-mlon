@@ -8,16 +8,16 @@ datapath = '/SPENCEdata/Research/database/SHEIC/'
 doAddSubstorms = True
 # Downloaded from https://supermag.jhuapl.edu/substorms/
 ssinfile = '/SPENCEdata/Research/database/SHEIC/substorms-ohtani-20131201_000000_to_20211202_000000.ascii'
-ss_maxdt_tolerance = '30 min'
+ss_maxdt_tolerance = '60 min'
 
 # sats = ['Sat_A','Sat_B','Sat_C']
 # sats = ['Sat_B','Sat_C']
-sats = ['Sat_B']
+sats = ['Sat_A','Sat_B']
 
 VERSION = '0302'
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
 hdfsuff = '_5sres'
-hdfsuff = '_1sres'
+# hdfsuff = '_1sres'
 # hdfsuff = '_Anna'
 # hdfsuff = '_Anna2'
 # hdfsuff = '_2014'
@@ -107,7 +107,7 @@ for key,val in f107cols.items():
 print("then dipole tilt ... ",end='')
 external['tilt'] = np.nan
 for year in np.unique(external.index.year):
-    print('calculting tilt for %s' % year)
+    print('calculating tilt for %s' % year)
     external.loc[str(year), 'tilt'] = dipole_tilt(external[str(year)].index, year)
 
 ##############################

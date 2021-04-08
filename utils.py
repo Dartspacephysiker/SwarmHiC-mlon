@@ -65,7 +65,8 @@ def konveksjonsdatabase(sat,bare_substorm=False,
         getcols += ['/VsatN', '/VsatE', '/VsatC']
 
     if for_fitting_Efield:
-        getcols += ['/Viy','/Ehx','/Ehy','/gdlat','/Longitude','/Bx', '/By', '/Bz']
+        # getcols += ['/Viy','/Ehx','/Ehy','/gdlat','/Longitude','/Bx', '/By', '/Bz']
+        getcols += ['/Viy','/gdlat','/Longitude','/Bx', '/By', '/Bz']
 
     getallextcols = True
     
