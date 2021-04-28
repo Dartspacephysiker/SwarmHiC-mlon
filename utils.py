@@ -10,6 +10,7 @@ import numpy as np
 
 def konveksjonsdatabase(sat,bare_substorm=False,
                         datadir='/SPENCEdata/Research/database/SHEIC/',
+                        add_azimuth=False,
                         include_satellite_NEC_vectors=False,
                         stride=1,
                         min_quality=0,
@@ -61,6 +62,12 @@ def konveksjonsdatabase(sat,bare_substorm=False,
     #%%
     #Velge ut noen kolonner og lage en DataFrame
     getcols = ['/mlt','/mlat','/alt','/yhat_d1','/yhat_d2','/Viy_d1','Viy_d2','/Quality_flags']
+    getcols = ['/mlt','/mlat','/alt',
+               '/yhat_d1','/yhat_d2',
+               '/Viy_d1','Viy_d2',
+               '/yhat_f1','/yhat_f2',
+               '/Viy_f1','Viy_f2',
+               '/Quality_flags']
     if include_satellite_NEC_vectors:
         getcols += ['/VsatN', '/VsatE', '/VsatC']
 
@@ -117,6 +124,78 @@ def konveksjonsdatabase(sat,bare_substorm=False,
         print(f"Junked {N - df.shape[0]} rows and kept {df.shape[0]}") 
 
         
+    # Add az thing for bias calculation
+    if add_azimuth:
+        # From Richmond (1995) under Eq. (3.18):
+        # "Figure 1 illustrates … d1 and e1 are more or less in the magnetic eastward direction;
+        #  d2 and e2 are generally downward and/or equatorward;
+        #  while d3 and e3 are along B_0."
+
+        use_geo_coords = False
+
+        df['az'] = np.nan
+
+        if use_geo_coords:
+            eastcomp = 'yhatE'
+            northcomp = 'yhatN'
+
+            print("Calculating azimuth angle using geographic coordinates, which I now (20210316) think is a bad idea ...")
+            print(f"Adding azimuth using geographic coords (np.arctan2({eastcomp},{northcomp}))")
+
+            xhat, yhat, zhat = calculate_satellite_frame_vectors_in_NEC_coordinates(df,vCol=['VsatN','VsatE','VsatC'])
+        
+            df['yhatN'] = yhat[0,:]
+            df['yhatE'] = yhat[1,:]
+            
+            df['az'] = np.rad2deg(np.arctan2(df['yhatE'].values,df['yhatN'].values))
+        
+        else:
+
+            try:
+
+                eastcomp = 'yhat_f1'
+                northcomp = 'yhat_f2'
+
+                print(f"Calculating azimuth angle using {eastcomp.replace('yhat_','')} and {northcomp.replace('yhat_','')} basis vectors in Apex coordinates," \
+                      +" which I think is a better idea than using geographic coordinates ...")
+        
+                if northcomp == 'yhat_f2':
+                    print("Making sure that yhat_f2 always points toward the pole in both hemispheres")
+                    print("REMEMBER: We ALSO flip yhat_f2 in NH because of the way secs_direct and secs_binned handle az (i.e., they do nothing and are ignorant)")
+                    print("The idea is to make sure that f2 always points equatorward. According to Figure 5 in Richmond (1995), I guess this means we have to flip the sign of f2 in the NH")
+                    df.loc[df['mlat'] > 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] > 0][eastcomp].values,df[df['mlat'] > 0][northcomp].values*(-1)))
+                    # df.loc[df['mlat'] < 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] < 0][eastcomp].values,df[df['mlat'] < 0][northcomp].values*(-1)))
+                    df['az'] = np.rad2deg(np.arctan2(df[eastcomp].values,df[northcomp].values*(-1)))
+                else:
+                    assert 2<0,"What to do?"
+
+            except:
+                
+                eastcomp = 'yhat_d1'
+                northcomp = 'yhat_d2'
+
+                print(f"Calculating azimuth angle using {eastcomp.replace('yhat_','')} and {northcomp.replace('yhat_','')} basis vectors in Apex coordinates," \
+                      +" which I think is a better idea than using geographic coordinates (but shouldn't we use e1 and e2 or f1 and f2?) ...")
+        
+                # print("Making sure that yhat_d2 always points toward the pole")
+                # df['az'] = np.nan
+                
+                # df.loc[df['mlat'] > 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] > 0][eastcomp].values,df[df['mlat'] > 0][northcomp].values*(-1)))
+                # # df.loc[df['mlat'] < 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] < 0][eastcomp].values,df[df['mlat'] < 0][northcomp].values))
+                
+                # print("REMEMBER: We ALSO flip yhat_d2 in SH because of the way secs_direct and secs_binned handle az (i.e., they do nothing)")
+                # print("This way, ")
+                # df.loc[df['mlat'] < 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] < 0][eastcomp].values,df[df['mlat'] < 0][northcomp].values*(-1)))
+                    
+                if northcomp == 'yhat_d2':
+                    print("Making sure that yhat_d2 always points toward the pole in both hemispheres")
+                    print("REMEMBER: We ALSO flip yhat_d2 in SH because of the way secs_direct and secs_binned handle az (i.e., they do nothing and are ignorant)")
+                    # df.loc[df['mlat'] > 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] > 0][eastcomp].values,df[df['mlat'] > 0][northcomp].values*(-1)))
+                    # df.loc[df['mlat'] < 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] < 0][eastcomp].values,df[df['mlat'] < 0][northcomp].values*(-1)))
+                    df['az'] = np.rad2deg(np.arctan2(df[eastcomp].values,df[northcomp].values*(-1)))
+                else:
+                    assert 2<0,"What to do?"
+
     return df
 
 

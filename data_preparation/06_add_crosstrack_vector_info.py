@@ -11,11 +11,11 @@ Weimer_update_dt = '180 s'  # How often should we update the Weimer model?
 maxtdiff_between_wanttime_and_omni = pd.Timedelta('2 min')
 
 # sats = ['Sat_A','Sat_B','Sat_C']
-sats = ['Sat_B']
+sats = ['Sat_A','Sat_B']
 # sats = ['Sat_B','Sat_C']
 VERSION = '0302'
 hdfsuff = '_5sres'
-hdfsuff = '_1sres'
+# hdfsuff = '_1sres'
 # hdfsuff = '_Anna'
 # hdfsuff = '_Anna2'
 # hdfsuff = '_2014'
@@ -34,7 +34,9 @@ getcols = ['Bx','By','Bz',
            'mlat','mlon','mlt',
            'VsatN','VsatE','VsatC',
            'd10','d11','d12',
-           'd20','d21','d22']
+           'd20','d21','d22',
+           'f10','f11',
+           'f20','f21']
 
 
 ##############################
@@ -121,19 +123,41 @@ for sat in sats:
     df['Viy_d1'] = df['d10']*df['Viy_E'] + df['d11']*Viy_NGeod + df['d12']*Viy_DGeod
     df['Viy_d2'] = df['d20']*df['Viy_E'] + df['d21']*Viy_NGeod + df['d22']*Viy_DGeod
     
+    print("Calculating Viy_d1, Viy_d2, yhat_d1, yhat_d2 ...")
+    df['Viy_f1'] = df['f10']*df['Viy_E'] + df['f11']*Viy_NGeod
+    df['Viy_f2'] = df['f20']*df['Viy_E'] + df['f21']*Viy_NGeod
+    
     # Also get satellite yhat vector in Apex coordinates
     xhat, yhat, zhat = calculate_satellite_frame_vectors_in_NEC_coordinates(df,vCol=['VsatN','VsatE','VsatC'])
+
+    # d vectors
     yhat_d1 = df['d10']*yhat[1,:] + df['d11']*yhat[0,:] + df['d12']*yhat[2,:]
     yhat_d2 = df['d20']*yhat[1,:] + df['d21']*yhat[0,:] + df['d22']*yhat[2,:]
     
+    # f vectors
+    yhat_f1 = df['f10']*yhat[1,:] + df['f11']*yhat[0,:]
+    yhat_f2 = df['f20']*yhat[1,:] + df['f21']*yhat[0,:]
+    yhatfmag = np.sqrt(yhat_f1**2+yhat_f2**2)
+    yhat_f1 /= yhatfmag
+    yhat_f2 /= yhatfmag
+
+    # 'sign 'em all
     df['gdlat'] = gdlat
     df['alt'] = alt
     
     df['yhat_d1'] = yhat_d1
     df['yhat_d2'] = yhat_d2
     
+    df['yhat_f1'] = yhat_f1
+    df['yhat_f2'] = yhat_f2
+    
     with pd.HDFStore(masterhdfdir+masterhdf, 'a') as store:
-        storecols = ['Viy_d1','Viy_d2', 'yhat_d1', 'yhat_d2', 'gdlat', 'alt']
+        # storecols = ['Viy_d1','Viy_d2', 'yhat_d1', 'yhat_d2', 'gdlat', 'alt']
+        storecols = ['Viy_d1','Viy_d2',
+                     'Viy_f1','Viy_f2',
+                     'yhat_d1', 'yhat_d2',
+                     'yhat_f1', 'yhat_f2',
+                     'gdlat', 'alt']
         print(f"Storing {', '.join(storecols)} for {sat} ...")
         for column in storecols:
             store.append(column, df[column], format='t', append=False)
@@ -155,6 +179,9 @@ for sat in sats:
         
         df['ViyWeimer_d1'] = np.nan
         df['ViyWeimer_d2'] = np.nan
+        
+        df['ViyWeimer_f1'] = np.nan
+        df['ViyWeimer_f2'] = np.nan
         
         for it,t in enumerate(times):
             print(f"{it:4d} {t.strftime('%Y-%m-%d %H:%M:%S')}",end=' ')
@@ -190,8 +217,13 @@ for sat in sats:
             df.loc[hereinds,'ViyWeimer_d1'] = vWeimer_yhat*yhat_d1[hereinds]
             df.loc[hereinds,'ViyWeimer_d2'] = vWeimer_yhat*yhat_d2[hereinds]
             
+            df.loc[hereinds,'ViyWeimer_f1'] = vWeimer_yhat*yhat_f1[hereinds]
+            df.loc[hereinds,'ViyWeimer_f2'] = vWeimer_yhat*yhat_f2[hereinds]
+            
         with pd.HDFStore(masterhdfdir+masterhdf, 'a') as store:
-            for column in ['ViyWeimer_d1','ViyWeimer_d2']:
+            # for column in ['ViyWeimer_d1','ViyWeimer_d2']:
+            for column in ['ViyWeimer_d1','ViyWeimer_d2',
+                           'ViyWeimer_f1','ViyWeimer_f2']:
                 store.append(column, df[column], format='t')
         
         # goodinds = np.isfinite(df['Viy_d2']) & np.isfinite(df['ViyWeimer_d2'])

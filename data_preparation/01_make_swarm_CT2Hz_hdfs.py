@@ -18,12 +18,12 @@ VERSION = '0302'
 mode = 'Annadb2'
 mode = '2014'
 mode = 'fulldb_5sres'
-mode = 'fulldb_1sres'
+# mode = 'fulldb_1sres'
 
 VALIDMODES = ['fulldb_5sres','fulldb_1sres','Annadb','Annadb2','2014']
 
 # sats = ['Sat_A','Sat_B','Sat_C']
-sats = ['Sat_B']
+sats = ['Sat_A','Sat_B']
 # sats = ['Sat_B','Sat_C']
 
 assert mode in VALIDMODES,"Must choose one of " + ",".join(VALIDMODES)+"!"
@@ -141,7 +141,9 @@ else:
 
 apex__geodetic2apexOpts=dict(min_time_resolution__sec=0.5,
                              max_N_months_twixt_apexRefTime_and_obs=3,
-                             return_apex_d_basevecs=True)  # Need these for getting flow in Apex coordinates
+                             return_apex_d_basevecs=True,
+                             return_apex_f_basevecs=True)  # Need these for getting flow in Apex coordinates
+
 ########################################
 # Download!
 for sat in sats:
