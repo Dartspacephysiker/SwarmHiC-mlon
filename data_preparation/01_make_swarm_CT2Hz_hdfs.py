@@ -1,6 +1,38 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# Here we open up all the .cdf.zip files and put their contents, along with some stuff in Modified Apex-110 coordinates, into an HDF file.
+# 02_f107_download_and_filter.py       : Add F10.7
+# 03_omni_download_1min_data.py        : Download OMNI data (IMF components, solar wind speed and density, SYM-H, + others?
+# 04_omni_process_1min_data.py         : Process OMNI data (calculate IMF clock angle mean,variance, average over 30-min window, etc.)
+# 05_add_omni_f107_dptilt_substorms.py : Sort index of each column in HDF file, add F10.7, OMNI, dipole tilt, B0_IGRF, og resten til HDF-filen
+# 06_add_crosstrack_vector_info.py     : Calculate cross-track convection in MA-110 coordinates, add these to HDF:
+#                                        ['Viy_d1','Viy_d2',
+#                                         'Viy_f1','Viy_f2',
+#                                         'yhat_d1', 'yhat_d2',
+#                                         'yhat_f1', 'yhat_f2',
+#                                         'gdlat', 'alt']
+
+
+# From swarmProcHelper.processSwarm2HzCrossTrackZip you get the following:
+# 'Bx','By','Bz',
+# 'Ehx','Ehy','Ehz',
+# 'Evx','Evy','Evz',
+# 'Latitude','Longitude','Radius',
+# 'MLT','QDLatitude',
+# 'Quality_flags',
+# 'Time',
+# 'Vicrx','Vicry','Vicrz',
+# 'Vixh','Vixh_error',
+# 'Vixv','Vixv_error',
+# 'Viy','Viy_error',
+# 'Viz','Viz_error',
+# 'VsatC','VsatE','VsatN'
+
+# From hCoord.geodetic2apex you get:
+# MA-110 mlat, mlon, and mlt, as well as MA-110 e, d, and f base vectors
+
+
 # Script for downloading all Swarm CT 2-Hz files from Swarm site
 #
 # Spencer Mark Hatch
@@ -83,7 +115,7 @@ import pandas as pd
 import os
 import requests
 import urllib.request
-from hatch_python_utils.satellites.Swarm import getCT2HzFTP,get_Swarm_combo,getCT2HzFileDateRange
+from hatch_python_utils.satellites.Swarm import getCT2HzFileDateRange
 
 from glob import glob
 from hatch_python_utils.earth import coordinates as hCoord
@@ -140,8 +172,10 @@ else:
     fullext = VERSION + '.ZIP'
 
 apex__geodetic2apexOpts=dict(min_time_resolution__sec=0.5,
+                             apexRefHeight_km=110,
                              max_N_months_twixt_apexRefTime_and_obs=3,
                              return_apex_d_basevecs=True,
+                             return_apex_e_basevecs=True,
                              return_apex_f_basevecs=True)  # Need these for getting flow in Apex coordinates
 
 ########################################

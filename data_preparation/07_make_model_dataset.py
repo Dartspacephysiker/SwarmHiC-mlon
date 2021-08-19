@@ -14,11 +14,12 @@ NEQ = nterms(NT, MT, NV, MV)
 hdfstorage = '/Users/laundal/Dropbox/data/space/LEO/data_v1_update.h5' # where the data is stored
 output = '/Users/laundal/Dropbox/science/projects/poloidal_toroidal/model_v1/data/modeldata_v1_update.hdf5' # where the data will be stored
 
-satellites = ['CHAMP', 'SwarmA', 'SwarmB', 'SwarmC']
+satellites = ['SwarmA', 'SwarmB']
 
 columns = ['h', 'qdlat', 'alat110', 'mlt', 'Be', 'Bn', 'Bu', 'f1e', 'f1n', 'f2e', 'f2n', 'd1e', 'd1n', 'd2e', 'd2n']
-ext_columns = ['vx', 'Bz', 'By', 'f107', 'tilt']
-
+choosef107 = 'f107obs'
+print("Should you use 'f107obs' or 'f107adj'??? Right now you use "+choosef107)
+ext_columns = ['vx', 'Bz', 'By', choosef107, 'tilt']
 
 # put the satellite data in a dict of dataframes:
 subsets = {}
@@ -33,7 +34,7 @@ with pd.HDFStore(hdfstorage, 'r') as store:
 print ('adding satellite weights')
 for satellite in satellites:
     if satellite in ['SwarmA', 'SwarmC']:
-        subsets[satellite]['s_weight'] = 0.5
+        subsets[satellite]['s_weight'] = 1.0
     else:
         subsets[satellite]['s_weight'] = 1.0
 
@@ -58,7 +59,7 @@ B = np.sqrt(full['By']**2 + full['Bz']**2)
 ca = np.arctan2(full['By'], full['Bz'])
 epsilon = full['vx'].abs()**(4/3.) * B**(2/3.) * (np.sin(ca/2)**(8))**(1/3.) / 1000 # mV/m # Newell coupling
 tau     = full['vx'].abs()**(4/3.) * B**(2/3.) * (np.cos(ca/2)**(8))**(1/3.) / 1000 # mV/m # Newell coupling
-f107    = full['f107']
+f107    = full[choosef107]
 tilt = full['tilt']
 full['w01' ] = 1              * np.sin(ca)
 full['w02' ] = 1              * np.cos(ca)

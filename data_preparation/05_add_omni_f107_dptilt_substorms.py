@@ -1,3 +1,4 @@
+##############################
 import pandas as pd
 import numpy as np
 from dipole import dipole_tilt
@@ -8,6 +9,7 @@ datapath = '/SPENCEdata/Research/database/SHEIC/'
 doAddSubstorms = True
 # Downloaded from https://supermag.jhuapl.edu/substorms/
 ssinfile = '/SPENCEdata/Research/database/SHEIC/substorms-ohtani-20131201_000000_to_20211202_000000.ascii'
+ssinfile = '/SPENCEdata/Research/database/substorms/substorms-ohtani_combined_with_OMNI_dptilt_F107__1975-2019_v2.h5'
 ss_maxdt_tolerance = '60 min'
 
 # sats = ['Sat_A','Sat_B','Sat_C']
@@ -104,7 +106,7 @@ for key,val in f107cols.items():
 ##############################
 # Dipole tilt
 
-print("then dipole tilt ... ",end='')
+print("then dipole tilt and B0_IGRF ... ",end='')
 external['tilt'] = np.nan
 for year in np.unique(external.index.year):
     print('calculating tilt for %s' % year)
@@ -114,21 +116,27 @@ for year in np.unique(external.index.year):
 # Substorms
 
 if doAddSubstorms:    
-    interper = lambda y,m,d,H,M: datetime.strptime(y+m+d+H+M,"%Y%m%d%H%M")
-    #names=['mlt','mlat','glon','glat']
-    names=['yr','mo','day','h','m','mlt','mlat','glon','glat']
-    # read in substorm list
-    ss = pd.read_csv(ssinfile,
-                     sep='\s+',
-                     skiprows=38,
-                     header=None,
-                     infer_datetime_format=True,
-                     parse_dates={'time': [0,1,2,3,4]},
-                     date_parser=interper,names=names)
-    ss = ss.set_index('time')
-    
-    assert ss.index.is_monotonic,"You might run into trouble"
-    
+
+    if ssinfile.endswith('csv'):
+        interper = lambda y,m,d,H,M: datetime.strptime(y+m+d+H+M,"%Y%m%d%H%M")
+        #names=['mlt','mlat','glon','glat']
+        names=['yr','mo','day','h','m','mlt','mlat','glon','glat']
+        # read in substorm list
+        ss = pd.read_csv(ssinfile,
+                         sep='\s+',
+                         skiprows=38,
+                         header=None,
+                         infer_datetime_format=True,
+                         parse_dates={'time': [0,1,2,3,4]},
+                         date_parser=interper,names=names)
+        ss = ss.set_index('time')
+        
+        assert ss.index.is_monotonic,"You might run into trouble"
+    elif ssinfile.endswith('h5'):
+        ss = pd.read_hdf(ssinfile)
+    else:
+        assert 2<0,f"Don't know how to handle substorm file: {ssinfile}. Stopping ..."
+
 ##############################
 # Add data to master hdfs
 
@@ -138,6 +146,17 @@ for sat in sats:
     masterhdf = f'{sat}_ct2hz_v{VERSION}{hdfsuff}.h5'
 
     print(masterhdf)
+
+    # Check if sorted, and sort if not
+    with pd.HDFStore(masterhdfdir+masterhdf, 'a') as store:
+        print("HDF is monotonic: ",store['/mlat'].index.is_monotonic)
+        if not store['/mlat'].index.is_monotonic:
+            print("Sorting index of each key")
+            keys = store.keys()
+            for key in keys:
+                print(key[1:]+' -> '+key,end=',')
+                store.append(key[1:],store[key].sort_index(),format='t',append=False)
+            print("")
 
     with pd.HDFStore(masterhdfdir+masterhdf, 'r') as store:
         times = store.select_column('/mlt', 'index').values # the time index
@@ -167,6 +186,10 @@ for sat in sats:
         onset_mlat = ss.iloc[whar]['mlat'].values
         onset_mlt = ss.iloc[whar]['mlt'].values
 
+        if 'mlt_SH' in ss.columns:
+            print("Also adding estimated onset mlt for SH (á la Østgaard et al, 2004)")
+            onset_mlt_SH = ss.iloc[whar]['mlt_SH'].values
+
         # if meas occurs outside tolerance window, make it nan
         print(f"Applying {ss_maxdt_tolerance.replace(' ','-')} tolerance window to substorm params")
         bads = np.abs(onset_dt) > pd.Timedelta(ss_maxdt_tolerance)  
@@ -176,10 +199,16 @@ for sat in sats:
         onset_mlat[bads] = np.nan
         onset_mlt[bads] = np.nan
 
+        if 'mlt_SH' in ss.columns:
+            onset_mlt_SH[bads] = np.nan
+
         # Add what we learned to sat_external for loading into hdf file
         sat_external['onset_dt_minutes'] = onset_dt
         sat_external['onset_mlat'] = onset_mlat
         sat_external['onset_mlt'] = onset_mlt
+
+        if 'mlt_SH' in ss.columns:
+            sat_external['onset_mlt_SH'] = onset_mlt_SH
 
     with pd.HDFStore(masterhdfdir+masterhdf, 'a') as store:
         store.append('/external', sat_external, data_columns = True, append = False)

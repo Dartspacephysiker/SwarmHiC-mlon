@@ -28,6 +28,7 @@ from hatch_python_utils.satellites.Swarm import getCT2HzFTP,get_Swarm_combo,getC
 # Define which satellites we'll look for during which years 
 
 sats = ['Sat_A','Sat_B','Sat_C']
+sats = ['Sat_A','Sat_B']
 y0,y1 = 2013,2021
 years = [str(val) for val in np.arange(y0,y1)]
 
@@ -204,6 +205,7 @@ for sat in sats:
     # Read in manually snatched list of files
 
     print("20210224 Even my new wget-based method doesn't work. The FTP site seems to hate me now, and I don't know why.")
+    print("20210802 But now wget works again?")
 
     import wget
     from glob import glob
@@ -263,6 +265,7 @@ for sat in sats:
 
     for ftpFile in todownload:
         print(f"Downloading {ftpFile}")
+        # breakpoint()
         wget.download('ftp://'+swarmFTPAddr+subDir+ftpFile,localdir+ftpFile)
         # print(f"Would run this: wget.download('{'ftp://'+swarmFTPAddr+subDir+ftpFile,localdir+ftpFile}')")
     

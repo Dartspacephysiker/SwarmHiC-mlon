@@ -155,22 +155,24 @@ def konveksjonsdatabase(sat,bare_substorm=False,
 
                 eastcomp = 'yhat_f1'
                 northcomp = 'yhat_f2'
-
+                
                 print(f"Calculating azimuth angle using {eastcomp.replace('yhat_','')} and {northcomp.replace('yhat_','')} basis vectors in Apex coordinates," \
                       +" which I think is a better idea than using geographic coordinates ...")
-        
+                
                 if northcomp == 'yhat_f2':
                     print("Making sure that yhat_f2 always points toward the pole in both hemispheres")
                     print("REMEMBER: We ALSO flip yhat_f2 in NH because of the way secs_direct and secs_binned handle az (i.e., they do nothing and are ignorant)")
-                    print("The idea is to make sure that f2 always points equatorward. According to Figure 5 in Richmond (1995), I guess this means we have to flip the sign of f2 in the NH")
-                    df.loc[df['mlat'] > 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] > 0][eastcomp].values,df[df['mlat'] > 0][northcomp].values*(-1)))
-                    # df.loc[df['mlat'] < 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] < 0][eastcomp].values,df[df['mlat'] < 0][northcomp].values*(-1)))
-                    df['az'] = np.rad2deg(np.arctan2(df[eastcomp].values,df[northcomp].values*(-1)))
+                    print("The idea is to make sure that f2 always points poleward. According to Figure 5 in Richmond (1995), I guess this means we have to flip the sign of f2 in the SH")
+                    df.loc[df['mlat'] > 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] > 0][eastcomp].values,df[df['mlat'] > 0][northcomp].values))
+                    df.loc[df['mlat'] < 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] < 0][eastcomp].values,df[df['mlat'] < 0][northcomp].values*(-1)))
+                    # df['az'] = np.rad2deg(np.arctan2(df[eastcomp].values,df[northcomp].values*(-1)))
                 else:
                     assert 2<0,"What to do?"
 
             except:
                 
+                print("FAILED to use yhat_f1/f2 to calculate azimuth! Use d1/d2")
+
                 eastcomp = 'yhat_d1'
                 northcomp = 'yhat_d2'
 
@@ -189,7 +191,7 @@ def konveksjonsdatabase(sat,bare_substorm=False,
                     
                 if northcomp == 'yhat_d2':
                     print("Making sure that yhat_d2 always points toward the pole in both hemispheres")
-                    print("REMEMBER: We ALSO flip yhat_d2 in SH because of the way secs_direct and secs_binned handle az (i.e., they do nothing and are ignorant)")
+                    print("REMEMBER: We flip yhat_d2 in both hemis because of the way secs_direct and secs_binned handle az (i.e., they do nothing and are ignorant)")
                     # df.loc[df['mlat'] > 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] > 0][eastcomp].values,df[df['mlat'] > 0][northcomp].values*(-1)))
                     # df.loc[df['mlat'] < 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] < 0][eastcomp].values,df[df['mlat'] < 0][northcomp].values*(-1)))
                     df['az'] = np.rad2deg(np.arctan2(df[eastcomp].values,df[northcomp].values*(-1)))
@@ -197,6 +199,169 @@ def konveksjonsdatabase(sat,bare_substorm=False,
                     assert 2<0,"What to do?"
 
     return df
+
+
+def calc_az(df,vCol=['VsatN','VsatE','VsatC'],
+            which_basevectors='apex_f',
+            use_geo_coords=False):
+
+    assert which_basevectors in ['apex_f','apex_d','geo']
+
+    # Add az thing for bias calculation
+    if which_basevectors == 'geo':
+        print("Calculating azimuth angle using geographic coordinates, which I now (20210316) think is a bad idea ...")
+        xhat, yhat, zhat = calculate_satellite_frame_vectors_in_NEC_coordinates(df,vCol=vCol)
+    
+        df['yhatN'] = yhat[0,:]
+        df['yhatE'] = yhat[1,:]
+        
+        df['az'] = np.rad2deg(np.arctan2(df['yhatE'].values,df['yhatN'].values))
+    
+    elif which_basevectors in ['apex_f','apex_d']:
+        df['az'] = np.nan
+    
+        if which_basevectors == 'apex_f':
+
+            eastcomp = 'yhat_f1'
+            northcomp = 'yhat_f2'
+    
+            print(f"Calculating azimuth angle using {eastcomp.replace('yhat_','')} and {northcomp.replace('yhat_','')} basis vectors in Apex coordinates," \
+                  +" which I think is a better idea than using geographic coordinates ...")
+        
+            if northcomp == 'yhat_f2':
+                print("Making sure that yhat_f2 always points toward the pole in both hemispheres")
+                print("REMEMBER: We ALSO flip yhat_f2 in NH because of the way secs_direct and secs_binned handle az (i.e., they do nothing and are ignorant)")
+                print("The idea is to make sure that f2 always points poleward. According to Figure 5 in Richmond (1995), I guess this means we have to flip the sign of f2 in the SH")
+                df.loc[df['mlat'] > 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] > 0][eastcomp].values,df[df['mlat'] > 0][northcomp].values))
+                df.loc[df['mlat'] < 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] < 0][eastcomp].values,df[df['mlat'] < 0][northcomp].values*(-1)))
+                # df['az'] = np.rad2deg(np.arctan2(df[eastcomp].values,df[northcomp].values*(-1)))
+            else:
+                assert 2<0,"What to do?"
+    
+        elif which_basevectors == 'apex_d':
+
+            eastcomp = 'yhat_d1'
+            northcomp = 'yhat_d2'
+
+            print("Calculating azimuth angle using d1 and d2 basis vectors in Apex coordinates, which I think is a better idea than using geographic coordinates (but shouldn't we use e1 and e2 or f1 and f2?) ...")
+            
+            print("Making sure that yhat_d2 always points toward the pole in both hemispheres")
+    
+            # df.loc[df['mlat'] > 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] > 0]['yhat_d1'].values,df[df['mlat'] > 0]['yhat_d2'].values*(-1)))
+            # # df.loc[df['mlat'] < 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] < 0]['yhat_d1'].values,df[df['mlat'] < 0]['yhat_d2'].values))
+            
+            # print("REMEMBER: We ALSO flip yhat_d2 in SH because of the way secs_direct and secs_binned handle az (i.e., they do nothing)")
+            # df.loc[df['mlat'] < 0,'az'] = np.rad2deg(np.arctan2(df[df['mlat'] < 0]['yhat_d1'].values,df[df['mlat'] < 0]['yhat_d2'].values*(-1)))
+    
+            df['az'] = np.rad2deg(np.arctan2(df[eastcomp].values,df[northcomp].values*(-1)))
+    
+
+def calculate_satellite_frame_vectors_in_NEC_coordinates(df,
+                                                         vCol=['VsatN','VsatE','VsatC'],
+                                                         assert_orthogonality=True):
+    """
+    Use the Swarm velocity components in NEC coordinates to calculate satellite-frame unit vectors in NEC coordinates
+
+    ## Definition of satellite-track measurements according to "EFI TII Cross-Track Flow Data Release Notes" (Doc. no: SW-RN-UOC-GS-004, Rev: 6)
+    "The coordinate system for the satellite-track measurements (along- and cross-track) is a right-handed orthonormal system
+    * Defined in a frame of reference co-rotating with the Earth and having 
+       * x in the direction of the satellite velocity, 
+       * y perpendicular to x and horizontally to the right when facing the direction of motion, and 
+       * z approximately downward completing the triad."
+
+    "Measurements may be transformed into the north-east-centre (NEC) system using the supplied satellite velocity vector in NEC coordinates as a reference."
+
+    2020-10-02
+    SMH
+    """
+
+    def dotprod(a,b):
+        return np.einsum('ij,ij->i',a,b)
+
+    # Make sure we have all columns we need
+    assert all(vCo in df.columns for vCo in vCol)
+
+    vUnitCol = [vCo+'hat' for vCo in vCol]
+
+    # Regne ut størrelsen til hastighetsvektorer
+    
+    VsatMag = np.sqrt((df[vCol]**2).sum(axis=1))
+    # df['VsatMag'] = np.sqrt((df[vCol]**2).sum(axis=1))
+
+    # Calculate magnitude of "horizontal" (i.e., not-vertical) component of satellite velocity vector
+    # df['VsatHoriz'] = np.sqrt((df[['VsatN','VsatE']]**2).sum(axis=1))
+    VsatHoriz = np.sqrt((df[['VsatN','VsatE']]**2).sum(axis=1))
+
+    # The condition $|v_c|/v \ll \sqrt{v_n^2+v_e^2}/v$ must be fulfilled if the statement "z is approximately downward" is to be true
+    # assert this condition
+    # assert (np.abs(df['VsatC'])/df['VsatHoriz']).max() < 0.01
+    assert (np.abs(df['VsatC'])/VsatHoriz).max() < 0.01
+
+    # Regne ut komponentene til hastighets-enhetsvektor
+    # for vCo,vUnitCo in zip(vCol,vUnitCol):
+    #     # df[vUnitCo] = df[vCo]/df['VsatMag']
+    #     df[vUnitCo] = df[vCo]/VsatMag
+
+    # Forsikre oss om at enhetsvektorene har faktisk størrelse 1 :)
+    # assert np.all(np.isclose(1,(df[vUnitCol]**2.).sum(axis=1)))
+
+    #Da ifølge dokumentasjonen ...
+
+    ########################################
+    # i. Definere x-enhetsvektoren i NEC-koordinater
+    
+    # xN = df['VsatNhat']
+    # xE = df['VsatEhat']
+    # xC = df['VsatChat']
+    
+    xN = df['VsatN']/VsatMag
+    xE = df['VsatE']/VsatMag
+    xC = df['VsatC']/VsatMag
+
+    assert np.all(np.isclose(1,xN**2+xE**2+xC**2))
+    #                          (df[vUnitCol]**2.).sum(axis=1)
+    # ))
+    
+    ########################################
+    # ii. Definere y-enhetsvektoren i NEC-koordinater
+    
+    # Regne ut fortegn til yE.
+    #Da y-enhetsvektoren er til høyre når man ser i bevegelsesretning, den peker østover (dvs yE > 0) når romfartøy går nordover, og vest (dvs yE < 0) når romfartøy går sørover
+    yESign = np.int64((xN > 0) | np.isclose(xN,0))*2-1
+
+    yE = yESign / np.sqrt( (xE**2 / xN**2) + 1)
+    yN = - xE / xN * yE
+    yC = yE * 0
+    
+    # Renorm just to make sure magnitudes are 1
+    yMag = np.sqrt(yN**2 + yE**2 + yC**2)
+    yN,yE,yC = yN / yMag,yE / yMag,yC / yMag
+    
+    ########################################
+    # iii. Definere z-enhetsvektoren i NEC-koordinater
+
+    zN, zE, zC = np.cross(np.vstack([xN,xE,xC]).T,np.vstack([yN,yE,yC]).T).T
+
+    # Renorm just to make sure magnitudes are 1
+    zMag = np.sqrt(zN**2+zE**2+zC**2)
+    zN,zE,zC = zN / zMag,zE / zMag,zC / zMag
+    
+    xhat = np.vstack([xN,xE,xC])
+    yhat = np.vstack([yN,yE,yC])
+    zhat = np.vstack([zN,zE,zC])
+
+    ########################################
+    # Assert orthogonality
+    
+    if assert_orthogonality:
+        # Assert xhat-prikk-yhat == 0
+        assert np.max(np.abs(dotprod(xhat.T,yhat.T))) < 0.00001
+        # Assert xhat-prikk-zhat == 0
+        assert np.max(np.abs(dotprod(xhat.T,zhat.T))) < 0.00001
+        # Assert yhat-prikk-zhat == 0
+        assert np.max(np.abs(dotprod(yhat.T,zhat.T))) < 0.00001
+
+    return xhat,yhat,zhat
 
 
 class SHkeys(object):
