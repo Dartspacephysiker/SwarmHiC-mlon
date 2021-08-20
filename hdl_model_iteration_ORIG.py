@@ -17,33 +17,28 @@ import h5py
 import sys
 from scipy.linalg import cholesky, cho_solve
 from dask.diagnostics import ProgressBar
-from utils import nterms, SHkeys, getG_torapex_dask
+from utils import nterms, SHkeys, getG_poltorapex_dask
 from gtg_array_utils import weighted_GTd_GTG_array, expand_GTG_and_GTd
 from functools import reduce
 
 
 t0 = time.time()
 
-masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
-output       = 'modeldata_v1_update.hdf5' # where the data will be stored
-
-datafile             = masterhdfdir+'modeldata_v1_update.hdf5'
-prefix_GTd_GTG_fn    = masterhdfdir+'matrices/GTG_GTd_array_iteration_'
-prefix_model_fn      = masterhdfdir+'matrices/model_v1_iteration_'
-prefix_model_value   = masterhdfdir+'matrices/model_v1_values_iteration_'
-prefix_huber_weights = masterhdfdir+'matrices/model_v1_huber_iteration_'
+datafile             = '/home/laundal/git/amps_inversion/data/modeldata_v1_update.hdf5'
+prefix_GTd_GTG_fn    = './matrices/GTG_GTd_array_iteration_'
+prefix_model_fn      = './matrices/model_v1_iteration_'
+prefix_model_value   = './matrices/model_v1_values_iteration_'
+prefix_huber_weights = './matrices/model_v1_huber_iteration_'
 
 
 """ MODEL/CALCULATION PARAMETERS """
 i = -1 # number for previous iteration
 
 NT, MT = 65, 3
-# NV, MV = 45, 3
-NV, MV = 0, 0
+NV, MV = 45, 3
 NEQ = nterms(NT, MT, NV, MV)
 NWEIGHTS = 19
-CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, KALLE'S ORIG
-CHUNKSIZE = 2 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights
+CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights
 K = 5 # how many chunks shall be calculated at once
 
 
@@ -91,25 +86,23 @@ def huber(array, k = 1.5, inmean = None, instd = None):
 
 def itersolve(filename):
 
-    # make regularization matrix:
+    # make regularlization matrix:
 
-    # lambda_V = 0
+    lambda_V = 0
     lambda_T = 1.e5
     
     while True:
-        # print( 'solving... with lambda_T = %s, lambda_V = %s' % (lambda_T, lambda_V))
-        print( 'solving... with lambda_T = %s' % (lambda_T))
+        print( 'solving... with lambda_T = %s, lambda_V = %s' % (lambda_T, lambda_V))
         try:
-            # n_cos_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(0).n
-            # n_sin_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(1).n
+            n_cos_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(0).n
+            n_sin_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(1).n
             n_cos_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(0).n
             n_sin_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(1).n
             GTd_GTG_num = np.load(filename)
             GTd, GTG = expand_GTG_and_GTd(GTd_GTG_num, NWEIGHTS, NEQ)
             
-            # nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.), 
-            #                 lambda_V * n_cos_V  * (n_cos_V  + 1.)                 , lambda_V * n_sin_V  * (n_sin_V  + 1.)                 )).flatten()
-            nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.))).flatten()
+            nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.), 
+                            lambda_V * n_cos_V  * (n_cos_V  + 1.)                 , lambda_V * n_sin_V  * (n_sin_V  + 1.)                 )).flatten()
             
             nn = np.tile(nn, NWEIGHTS)
                      
@@ -140,73 +133,41 @@ f = h5py.File(datafile, 'r')['/data']
 # make a 2D array, one row for each item, and make a dictionary to map between the row and its name
 names = [item[0] for item in f.items()]
 datamap = dict(zip(names, range(len(names))))
-
-# breakpoint()
-
-dosmall = False
-if dosmall:
-    print("Small subset!")
-    data = da.vstack((da.from_array(f[name][()][0:1000000:100], chunks = CHUNKSIZE) for name in names))
-else:
-    data = da.vstack((da.from_array(f[name], chunks = CHUNKSIZE) for name in names))
+data = da.vstack((da.from_array(f[name], chunks = CHUNKSIZE) for name in names))
 ND = data.size/len(datamap) # number of datapoints
 print( '%s - loaded data - %s points across %s arrays (dt = %.1f sec)' % (time.ctime(), ND, len(datamap), time.time() - t0))
 
-# G0 = getG_torapex_dask(NT, MT, NV, MV,
-#                        data[datamap['qdlat'  ]].reshape((data.shape[1], 1)),
-#                        data[datamap['alat110']].reshape((data.shape[1], 1)),
-#                    15* data[datamap['mlt'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['h'      ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f1e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f1n'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f2e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f2n'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d1e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d1n'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d2e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d2n'    ]].reshape((data.shape[1], 1)))
-# We don't need the poloidal stuff
-import warnings
-warnings.warn("You have not modified getG_torapex_dask to make sure that you're calculating the right stuff!")
-G0 = getG_torapex_dask(NT, MT, 
-                       data[datamap['mlat'           ]].reshape((data.shape[1], 1)),
-                   15* data[datamap['mlt'            ]].reshape((data.shape[1], 1)),
-                       data[datamap['Be3_in_Tesla'   ]].reshape((data.shape[1], 1)),
-                       # data[datamap['B0IGRF'         ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d10'            ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d11'            ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d22'            ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d20'            ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d21'            ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d22'            ]].reshape((data.shape[1], 1)),
-                       data[datamap['lperptoB_dot_e1']].reshape((data.shape[1], 1)),
-                       data[datamap['lperptoB_dot_e2']].reshape((data.shape[1], 1)))
-
+G0 = getG_poltorapex_dask(NT, MT, NV, MV, data[datamap['qdlat'  ]].reshape((data.shape[1], 1)),
+                                          data[datamap['alat110']].reshape((data.shape[1], 1)),
+                                      15* data[datamap['mlt'    ]].reshape((data.shape[1], 1)),
+                                          data[datamap['h'      ]].reshape((data.shape[1], 1)),
+                                          data[datamap['f1e'    ]].reshape((data.shape[1], 1)),
+                                          data[datamap['f1n'    ]].reshape((data.shape[1], 1)),
+                                          data[datamap['f2e'    ]].reshape((data.shape[1], 1)),
+                                          data[datamap['f2n'    ]].reshape((data.shape[1], 1)),
+                                          data[datamap['d1e'    ]].reshape((data.shape[1], 1)),
+                                          data[datamap['d1n'    ]].reshape((data.shape[1], 1)),
+                                          data[datamap['d2e'    ]].reshape((data.shape[1], 1)),
+                                          data[datamap['d2n'    ]].reshape((data.shape[1], 1)))
 G0 = G0.rechunk((G0.chunks[0], G0.shape[1]))
 print( '%s - done computing G0 matrix graph. G0 shape is %s (dt = %.1f sec)' % (time.ctime(), G0.shape, time.time() - t0))
 
 # data vector:
-# d = da.hstack(tuple(data[datamap[key]] for key in ['Be', 'Bn', 'Bu']))
-d = da.hstack(tuple(data[datamap[key]] for key in ['lperptoB_dot_ViyperptoB']))
+d = da.hstack(tuple(data[datamap[key]] for key in ['Be', 'Bn', 'Bu']))
 d = d.reshape((d.size, 1)) # to column
 print( '%s - made d vector (dt = %.1f sec)' % (time.ctime(), time.time() - t0))
 
 # prepare static weights (0.5 for side-by side satellites)
 s_weight = data[datamap['s_weight']]
-# s_weight = da.hstack((s_weight, s_weight, s_weight)) # stack three times - one for each component
-# s_weight = da.hstack((s_weight)) # stack once - one for each component
+s_weight = da.hstack((s_weight, s_weight, s_weight)) # stack three times - one for each component
 
 # prepare matrix of weights (the external parameters)
 weights = da.vstack( tuple([data[datamap['w' + str(jj + 1).zfill(2)]] for jj in range(NWEIGHTS-1)]))
 weights = weights.astype(np.float32)
 weights = da.vstack((da.ones(weights.shape[1], chunks = weights[0].chunks), weights)) # add a 1 weight on top (c0)
-# weights = da.hstack((weights, weights, weights)).T # tile them and transpose, shape is (Nmeas*3, NWEIGHTS)
-weights = weights.T  # tile them and transpose, shape is (Nmeas, NWEIGHTS)
-# weights = da.hstack((weights)).T # tile them and transpose
+weights = da.hstack((weights, weights, weights)).T # tile them and transpose
 weights = weights.rechunk((G0.chunks[0], NWEIGHTS))
 
-# breakpoint()
-print("Entering loop ...")
 while True: # enter loop
     #########################################################################
     # (2) Load model vector, model values, and huber weights from iteration i

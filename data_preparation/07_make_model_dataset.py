@@ -11,12 +11,34 @@ NT, MT, NV, MV = 65, 3, 45, 3
 NEQ = nterms(NT, MT, NV, MV)
 
 
-hdfstorage = '/Users/laundal/Dropbox/data/space/LEO/data_v1_update.h5' # where the data is stored
-output = '/Users/laundal/Dropbox/science/projects/poloidal_toroidal/model_v1/data/modeldata_v1_update.hdf5' # where the data will be stored
+output = 'modeldata_v1_update.hdf5' # where the data will be stored
 
-satellites = ['SwarmA', 'SwarmB']
+# satellites = ['SwarmA', 'SwarmB']
+# satmap = {'CHAMP':1, 'SwarmA':2, 'SwarmB':3, 'SwarmC':4}
+sats = ['Sat_A','Sat_B']
+satmap = {'SwarmA':1, 'SwarmB':2}
+VERSION = '0302'
+hdfsuff = '_5sres'
 
-columns = ['h', 'qdlat', 'alat110', 'mlt', 'Be', 'Bn', 'Bu', 'f1e', 'f1n', 'f2e', 'f2n', 'd1e', 'd1n', 'd2e', 'd2n']
+masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
+datapath = '/SPENCEdata/Research/database/SHEIC/'
+
+
+# Here's the proof that we can use lperptoB_dot_ViyperptoB as the LHS of Eq (7) in 'SHEIC DERIVATION'
+# lperptoB_dot_ViyperptoB = store['/lperptoB_E']*store['/ViyperptoB_E']+store['/lperptoB_N']*store['/ViyperptoB_N']+store['/lperptoB_U']*store['/ViyperptoB_U']
+# ViyperptoB = np.sqrt(store['/ViyperptoB_E']**2+store['/ViyperptoB_N']**2++store['/ViyperptoB_U']**2)
+# print((np.abs(lperptoB_dot_ViyperptoB)-ViyperptoB).max())
+# Out[37]: 7.275957614183426e-12
+# print((np.abs(lperptoB_dot_ViyperptoB)-ViyperptoB).min())
+# Out[38]: -2.7284841053187847e-11
+
+
+columns = ['mlat', 'mlt','lperptoB_dot_e1','lperptoB_dot_e2']
+# columns_for_derived = ['d10','d11','d12',
+#                        'd20','d21','d22',
+#                        'lperptoB_E','lperptoB_N','lperptoB_U',
+#                        'ViyperptoB_E','ViyperptoB_N','ViyperptoB_U']
+
 choosef107 = 'f107obs'
 print("Should you use 'f107obs' or 'f107adj'??? Right now you use "+choosef107)
 ext_columns = ['vx', 'Bz', 'By', choosef107, 'tilt']
@@ -24,27 +46,61 @@ ext_columns = ['vx', 'Bz', 'By', choosef107, 'tilt']
 # put the satellite data in a dict of dataframes:
 subsets = {}
 external = {}
-with pd.HDFStore(hdfstorage, 'r') as store:
-    for satellite in satellites:
-        print ('reading %s' % satellite)
-        subsets[satellite]  = store.select(satellite + '/apex_data', columns = columns)
-        external[satellite] = store.select(satellite + '/external', columns = ext_columns)
+for sat in sats:
+    # print(sat)
+
+    inputhdf = sat+f'_ct2hz_v{VERSION}{hdfsuff}.h5'
+
+    print(inputhdf)
+
+    with pd.HDFStore(masterhdfdir+inputhdf, 'r') as store:
+
+        print ('reading %s' % sat)
+        tmpdf = pd.DataFrame()
+        tmpextdf = pd.DataFrame()
+
+        # Make df with getcols
+        print("Getting main columns ... ",end='')
+        for wantcol in columns:
+            tmpdf[wantcol] = store['/'+wantcol]
+
+        print("Getting ext columns ...",end='')
+        tmpextdf = store.select('/external', columns = ext_columns)
+        # for wantcol in ext_columns:
+            # tmpextdf[wantcol] = store['/'+wantcol]
+
+        print("Getting derived quantities ...")
+        print("D",end=', ')
+        D = np.sqrt( (store['d11']*store['d22']-store['d12']*store['d21'])**2 + \
+                     (store['d12']*store['d20']-store['d10']*store['d22'])**2 + \
+                     (store['d10']*store['d21']-store['d11']*store['d20'])**2)
+        print("Be3_in_Tesla",end=', ')
+        tmpdf['Be3_in_Tesla'] = store['B0IGRF']/D/1e9
+        print("lperptoB_dot_ViyperptoB",end=', ')
+        tmpdf['lperptoB_dot_ViyperptoB'] = store['/lperptoB_E']*store['/ViyperptoB_E']+\
+            store['/lperptoB_N']*store['/ViyperptoB_N']+\
+            store['/lperptoB_U']*store['/ViyperptoB_U']
+        print("OK!")
+        # subsets[sat]  = store.select('/apex_data', columns = columns)
+        # external[sat] = store.select(sat + '/external', columns = ext_columns)
+        subsets[sat]  = tmpdf
+        external[sat] = tmpextdf
 
 # add alpha charlie-weight to main df:
-print ('adding satellite weights')
-for satellite in satellites:
-    if satellite in ['SwarmA', 'SwarmC']:
-        subsets[satellite]['s_weight'] = 1.0
-    else:
-        subsets[satellite]['s_weight'] = 1.0
+print ('adding satellite weights ...',end='')
+for sat in sats:
+    # if sat in ['SwarmA', 'SwarmC']:
+    #     subsets[sat]['s_weight'] = 1.0
+    # else:
+    subsets[sat]['s_weight'] = 1.0
 
 # add external parameters to main df - and drop nans:
 print ('adding external to main dataframe')
-for satellite in satellites:
-    subsets[satellite][external[satellite].columns] = external[satellite]
-    length = len(subsets[satellite])
-    subsets[satellite] = subsets[satellite].dropna()
-    print ('dropped %s out of %s datapoints because of nans' % (length - len(subsets[satellite]), length))
+for sat in sats:
+    subsets[sat][external[sat].columns] = external[sat]
+    length = len(subsets[sat])
+    subsets[sat] = subsets[sat].dropna()
+    print ('dropped %s out of %s datapoints because of nans' % (length - len(subsets[sat]), length))
 
 print ('merging the subsets')
 full = pd.concat(subsets)
@@ -81,19 +137,23 @@ full['w17' ] = tilt * tau     * np.cos(ca)
 full['w18' ] = f107.copy()
 
 
-
-columns = ['h', 'qdlat', 'alat110', 'mlt', 'Be', 'Bn', 'Bu', 'f1e', 'f1n', 'f2e', 'f2n', 'd1e', 'd1n', 'd2e', 'd2n', 's_weight', 
-           'w01', 'w02', 'w03', 'w04', 'w05', 'w06', 'w07', 'w08', 'w09', 'w10', 'w11', 'w12', 'w13', 'w14', 'w15', 'w16', 'w17', 'w18', 
+columns = ['mlat', 'mlt',
+           'Be3_in_Tesla', 'lperptoB_dot_ViyperptoB',
+           'lperptoB_dot_e1','lperptoB_dot_e2',
+           's_weight', 
+           'w01', 'w02', 'w03', 'w04', 'w05', 'w06',
+           'w07', 'w08', 'w09', 'w10', 'w11', 'w12',
+           'w13', 'w14', 'w15', 'w16', 'w17', 'w18', 
            'time', 'sat_identifier']
 sat  = [k[0] for k in full['time']]
 time = [k[1] for k in full['time']]
 full['time'] = time
 full['sat'] = sat
-full['sat_identifier'] = full['sat'].map({'CHAMP':1, 'SwarmA':2, 'SwarmB':3, 'SwarmC':4})
+full['sat_identifier'] = full['sat'].map(satmap)
 full['time'] = np.float64(full['time'].values)
 
 print (full.shape)
 chunksize = NEQ
 
-newstore = da.to_hdf5(output, dict(zip(['data/' + k for k in columns], [da.from_array(full[k].values, chunksize) for k in columns])))
+newstore = da.to_hdf5(masterhdfdir+output, dict(zip(['data/' + k for k in columns], [da.from_array(full[k].values, chunksize) for k in columns])))
 print ('put model data in %s' % output)

@@ -654,3 +654,113 @@ def getG_poltorapex_dask(NT, MT, NV, MV, qlat, alat, phi, h, f1e, f1n, f2e, f2n,
     return G
 
 
+def getG_torapex_dask(NT, MT, alat, phi, 
+                      Be3_in_Tesla,
+                      # B0IGRF,
+                      # d10,d11,d12,
+                      # d20,d21,d22,
+                      lperptoB_dot_e1, lperptoB_dot_e2,
+                      RR = REFRE, makenoise = False, toroidal_minlat = 0, apex_ref_height=110):
+    """ all input arrays should be dask arrays with shape (N, 1), and with the same chunksize. """
+    gc.collect()
+
+    # generate spherical harmonic keys    
+    keys = {} # dictionary of spherical harmonic keys
+    keys['cos_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(0)
+    keys['sin_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(1)
+    # keys['cos_V'] = SHkeys(NV, MV).setNmin(1).MleN().Mge(0)
+    # keys['sin_V'] = SHkeys(NV, MV).setNmin(1).MleN().Mge(1)
+    # m_cos_V = da.from_array(keys['cos_V'].m, chunks = keys['cos_V'].m.shape)
+    # m_sin_V = da.from_array(keys['sin_V'].m, chunks = keys['sin_V'].m.shape)
+    m_cos_T = da.from_array(keys['cos_T'].m, chunks = keys['cos_T'].m.shape)
+    m_sin_T = da.from_array(keys['sin_T'].m, chunks = keys['sin_T'].m.shape)
+
+    # D = np.sqrt( (d11*d22-d12*d21)**2 + \
+    #              (d12*d20-d10*d22)**2 + \
+    #              (d10*d21-d11*d20)**2)
+
+    # Be3 = B0IGRF/D
+
+    # nV = da.hstack((da.from_array(keys['cos_V'].n, chunks = keys['cos_V'].n.shape), da.from_array(keys['sin_V'].n, chunks = keys['sin_V'].n.shape)))
+
+    # if makenoise: print( m_cos_V.shape, m_sin_V.shape, m_cos_T.shape, m_sin_T.shape)
+    if makenoise: print( m_cos_T.shape, m_sin_T.shape)
+
+    # generate Legendre matrices - first get dicts of arrays, and then stack them in the appropriate fashion
+    if makenoise: print( 'Calculating Legendre functions. alat shape and chunks:', alat.shape, alat.chunks)
+    legendre_T = alat.map_blocks(lambda x: get_legendre_arrays(NT, MT, 90 - x, keys['cos_T'], minlat = toroidal_minlat), dtype = alat.dtype, chunks = (alat.chunks[0], tuple([2*len(keys['cos_T'])])))
+    # legendre_V = qlat.map_blocks(lambda x: get_legendre_arrays(NV, MV, 90 - x, keys['cos_V']), dtype = qlat.dtype, chunks = (qlat.chunks[0], tuple([2*len(keys['cos_V'])])))
+    P_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
+    dP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
+    # P_cos_V  =  legendre_V[:, :len(keys['cos_V']) ] # split
+    # dP_cos_V = -legendre_V[:,  len(keys['cos_V']):]
+    # if makenoise: print( 'P, dP cos_T and P, dP cos_V size and chunks', P_cos_T.shape, dP_cos_T.shape, P_cos_V.shape, dP_cos_V.shape)#, P_cos_T.chunks, dP_cos_T.chunks, P_cos_V.chunks, dP_cos_V.chunks
+    if makenoise: print( 'P, dP cos_T size and chunks', P_cos_T.shape, dP_cos_T.shape)#, P_cos_T.chunks, dP_cos_T.chunks
+    P_sin_T  =  P_cos_T[ :, keys['cos_T'].m.flatten() != 0] 
+    dP_sin_T =  dP_cos_T[:, keys['cos_T'].m.flatten() != 0]
+    # P_sin_V  =  P_cos_V[ :, keys['cos_V'].m.flatten() != 0]
+    # dP_sin_V =  dP_cos_V[:, keys['cos_V'].m.flatten() != 0]  
+    # if makenoise: print( 'P, dP sin_T and P, dP sin_V size and chunks', P_sin_T.shape, dP_sin_T.shape, P_sin_V.shape, dP_sin_V.shape, P_sin_T.chunks[0], dP_sin_T.chunks[1], P_sin_V.chunks[1], dP_sin_V.chunks[1])
+    if makenoise: print( 'P, dP sin_T size and chunks', P_sin_T.shape, dP_sin_T.shape, P_sin_T.chunks[0], dP_sin_T.chunks[1])
+
+    # trig matrices:
+    cos_T  =  da.cos(phi * d2r * m_cos_T)#.rechunk((phi.chunks[0], m_cos_T.shape[1]))
+    sin_T  =  da.sin(phi * d2r * m_sin_T)#.rechunk((phi.chunks[0], m_sin_T.shape[1]))
+    # cos_V  =  da.cos(phi * d2r * m_cos_V)#.rechunk((phi.chunks[0], m_cos_V.shape[1]))
+    # sin_V  =  da.sin(phi * d2r * m_sin_V)#.rechunk((phi.chunks[0], m_sin_V.shape[1]))
+    dcos_T = -da.sin(phi * d2r * m_cos_T)#.rechunk((phi.chunks[0], m_cos_T.shape[1]))
+    dsin_T =  da.cos(phi * d2r * m_sin_T)#.rechunk((phi.chunks[0], m_sin_T.shape[1]))
+    # dcos_V = -da.sin(phi * d2r * m_cos_V)#.rechunk((phi.chunks[0], m_cos_V.shape[1]))
+    # dsin_V =  da.cos(phi * d2r * m_sin_V)#.rechunk((phi.chunks[0], m_sin_V.shape[1]))
+
+    if makenoise: print( cos_T.shape, sin_T.shape)
+
+    # cos_qlat   = da.cos(qlat * d2r)
+    cos_alat   = da.cos(alat * d2r)
+
+    sinI  = 2 * da.sin( alat * d2r )/da.sqrt(4 - 3*cos_alat**2)
+
+    # r  = RR + h
+    # Rtor  = RR/r
+
+    R = (RR + apex_ref_height)*1000                   # convert from km to m
+
+    # F = f1e*f2n - f1n*f2e
+    # if makenoise: print( F.shape, F)
+
+
+    # matrix with horizontal spherical harmonic functions in QD coordinates
+    # V        = da.hstack((P_cos_V * cos_V, P_sin_V * sin_V ))
+
+    # matrices with partial derivatives in QD coordinates:
+    # dV_dqlon  = da.hstack(( P_cos_V * dcos_V * m_cos_V,  P_sin_V * dsin_V * m_sin_V ))
+    # dV_dqlat  = da.hstack((dP_cos_V *  cos_V          , dP_sin_V *  sin_V           ))
+
+    # matrices with partial derivatives in MA coordinates:
+    dT_dalon  = da.hstack(( P_cos_T * dcos_T * m_cos_T,  P_sin_T * dsin_T * m_sin_T))
+    dT_dalat  = da.hstack((dP_cos_T *  cos_T          , dP_sin_T *  sin_T          ))
+
+    # things
+    lperptoB_dot_vperptoB = 1/(R * Be3_in_Tesla) * (lperptoB_dot_e2 / cos_alat * dT_dalon + \
+                                                    lperptoB_dot_e1 / sinI     * dT_dalat)
+
+    # Toroidal field components
+    # B_T_e  =   -d1n * dT_dalon / cos_alat + d2n * dT_dalat / sinI
+    # B_T_n  =    d1e * dT_dalon / cos_alat - d2e * dT_dalat / sinI
+    # B_T_u  =    da.zeros(B_T_n.shape, chunks = B_T_n.chunks)
+
+    # Poloidal field components:
+    # B_V_e = (-f2n / (cos_qlat * r) * dV_dqlon + f1n * dV_dqlat / r) * RR * Rtor ** (nV + 1)
+    # B_V_n = ( f2e / (cos_qlat * r) * dV_dqlon - f1e * dV_dqlat / r) * RR * Rtor ** (nV + 1)
+    # B_V_u = da.sqrt(F) * V  * (nV + 1) * Rtor ** (nV + 2)
+
+    # G     = da.hstack((da.vstack((B_T_e , 
+    #                              B_T_n , 
+    #                              B_T_u ))
+    # ))
+    # G     = da.vstack((B_T_e , 
+    #                    B_T_n , 
+    #                    B_T_u ))
+    G = lperptoB_dot_vperptoB
+
+    return G
