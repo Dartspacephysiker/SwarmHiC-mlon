@@ -3,10 +3,18 @@
 
 import numpy as np
 
+TRANSPOSEEM = True
+PRINTOUTPUT = False
+
 coeffdir = '/SPENCEdata/Research/database/SHEIC/matrices/10k_points/'
 coefffile = 'model_v1_values_iteration_3.npy'
 coefffile = 'model_v1_iteration_3.npy'
-outfile = coefffile.replace('.npy','.txt')
+
+if TRANSPOSEEM:
+    outfile = coefffile.replace('.npy','_TRANSPOSE.txt')
+    print("Making TRANSPOSE coefficient file")
+else:
+    outfile = coefffile.replace('.npy','.txt')
 
 # Read .npy coeff file
 
@@ -53,13 +61,16 @@ SINM = keys['sin_T'].m.ravel()
 ncosterms = len(COSN)
 nsinterms = len(SINN)
 
-COEFFS = coeffs.reshape((NEQ,NWEIGHTS)).copy()
-#Maybe?
-#COEFFS = coeffs.reshape((NWEIGHTS,NEQ)).copy()
-
+# Based on Research/pySHEIC/pysheic/testem.py, it turns out that the order needs to be (NWEIGHTS, NEQ), followed by a transpose operation
+if TRANSPOSEEM:
+    COEFFS = coeffs.reshape((NEQ,NWEIGHTS)).copy()
+else:
+    COEFFS = coeffs.reshape((NWEIGHTS,NEQ)).T.copy()
+    
 COSCOEFFS = COEFFS[:ncosterms,]
 SINCOEFFS = COEFFS[ncosterms:,]
-fmtstring = "{:2d} {:1d} "+"{:10f}"*38
+# fmtstring = "{:2d} {:1d}"+" {:10f}"*38
+fmtstring = "{:2d} {:1d}"+" {:10.4g}"*38
 
 dadzilla = """# Sherical harmonic coefficients for the Swarm HEmispherically resolved Ionospheric Convection (SHEIC) model
 # Produced Aug 2021
@@ -97,8 +108,10 @@ openstring = openstring.format('#n','m',
                        'tor_c_tilt_tau_cosca'    ,  'tor_s_tilt_tau_cosca'    ,
                        'tor_c_f107'              ,  'tor_s_f107'              )
 outf = open(coeffdir+outfile,'w')
-print(dadzilla)
-print(openstring)
+print("Opening "+coeffdir+outfile+' ...')
+if PRINTOUTPUT:
+    print(dadzilla)
+    print(openstring)
 outf.write(dadzilla+'\n')
 outf.write(openstring+'\n')
 
@@ -142,35 +155,28 @@ for coscount in range(ncosterms):
                            tor_c_tilt_tau_sinca    ,  tor_s_tilt_tau_sinca    ,
                            tor_c_tilt_tau_cosca    ,  tor_s_tilt_tau_cosca    ,
                            tor_c_f107              ,  tor_s_f107              )
-    print(thisline)
+    if PRINTOUTPUT:
+        print(thisline)
     outf.write(thisline+'\n')
 
 outf.close()
 
-tor_c_const               tor_s_const             
-tor_c_sinca               tor_s_sinca             
-tor_c_cosca               tor_s_cosca             
-tor_c_epsilon             tor_s_epsilon           
-tor_c_epsilon_sinca       tor_s_epsilon_sinca     
-tor_c_epsilon_cosca       tor_s_epsilon_cosca     
-tor_c_tilt                tor_s_tilt              
-tor_c_tilt_sinca          tor_s_tilt_sinca        
-tor_c_tilt_cosca          tor_s_tilt_cosca        
-tor_c_tilt_epsilon        tor_s_tilt_epsilon      
-tor_c_tilt_epsilon_sinca  tor_s_tilt_epsilon_sinca
-tor_c_tilt_epsilon_cosca  tor_s_tilt_epsilon_cosca
-tor_c_tau                 tor_s_tau               
-tor_c_tau_sinca           tor_s_tau_sinca         
-tor_c_tau_cosca           tor_s_tau_cosca         
-tor_c_tilt_tau            tor_s_tilt_tau          
-tor_c_tilt_tau_sinca      tor_s_tilt_tau_sinca    
-tor_c_tilt_tau_cosca      tor_s_tilt_tau_cosca    
-tor_c_f107                tor_s_f107              
-
-
-
-
-
-
-
-
+# tor_c_const               tor_s_const             
+# tor_c_sinca               tor_s_sinca             
+# tor_c_cosca               tor_s_cosca             
+# tor_c_epsilon             tor_s_epsilon           
+# tor_c_epsilon_sinca       tor_s_epsilon_sinca     
+# tor_c_epsilon_cosca       tor_s_epsilon_cosca     
+# tor_c_tilt                tor_s_tilt              
+# tor_c_tilt_sinca          tor_s_tilt_sinca        
+# tor_c_tilt_cosca          tor_s_tilt_cosca        
+# tor_c_tilt_epsilon        tor_s_tilt_epsilon      
+# tor_c_tilt_epsilon_sinca  tor_s_tilt_epsilon_sinca
+# tor_c_tilt_epsilon_cosca  tor_s_tilt_epsilon_cosca
+# tor_c_tau                 tor_s_tau               
+# tor_c_tau_sinca           tor_s_tau_sinca         
+# tor_c_tau_cosca           tor_s_tau_cosca         
+# tor_c_tilt_tau            tor_s_tilt_tau          
+# tor_c_tilt_tau_sinca      tor_s_tilt_tau_sinca    
+# tor_c_tilt_tau_cosca      tor_s_tilt_tau_cosca    
+# tor_c_f107                tor_s_f107              

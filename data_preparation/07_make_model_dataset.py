@@ -16,7 +16,7 @@ output = 'modeldata_v1_update.hdf5' # where the data will be stored
 # satellites = ['SwarmA', 'SwarmB']
 # satmap = {'CHAMP':1, 'SwarmA':2, 'SwarmB':3, 'SwarmC':4}
 sats = ['Sat_A','Sat_B']
-satmap = {'SwarmA':1, 'SwarmB':2}
+satmap = {'Sat_A':1, 'Sat_B':2}
 VERSION = '0302'
 hdfsuff = '_5sres'
 

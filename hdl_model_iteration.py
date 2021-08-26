@@ -28,10 +28,35 @@ masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
 output       = 'modeldata_v1_update.hdf5' # where the data will be stored
 
 datafile             = masterhdfdir+'modeldata_v1_update.hdf5'
+
+dosmall = False
+doonlynegbzsouth = True
+
+do_modded_model = dosmall or doonlynegbzsouth
+
+if dosmall:
+    indlets = slice(0,1000000,100)
+    ninds = np.arange(indlets.start,indlets.stop,indlets.step).size
+    print(f"Doing smaller version of database consisting of {ninds} indices: [{indlets.start}:{indlets.stop}:{indlets.step}]")
+    MODELVERSION = 'v1small'
+elif doonlynegbzsouth:
+    MODELVERSION = 'v1BzNegNH'
+    indfile = 'negbz_array_indices.txt'
+    print(f"Loading indices from file '{indfile}'")
+    indlets = np.int64(np.loadtxt(masterhdfdir+indfile))
+    print(f"Got {len(indlets)} indices from file '{indfile}'")
+else:
+    MODELVERSION = 'v1'
+
+print("******************************")
+print(f"MODEL VERSION: {MODELVERSION}")
+print("******************************")
+print("")
+
 prefix_GTd_GTG_fn    = masterhdfdir+'matrices/GTG_GTd_array_iteration_'
-prefix_model_fn      = masterhdfdir+'matrices/model_v1_iteration_'
-prefix_model_value   = masterhdfdir+'matrices/model_v1_values_iteration_'
-prefix_huber_weights = masterhdfdir+'matrices/model_v1_huber_iteration_'
+prefix_model_fn      = masterhdfdir+'matrices/model_'+MODELVERSION+'_iteration_'
+prefix_model_value   = masterhdfdir+'matrices/model_'+MODELVERSION+'_values_iteration_'
+prefix_huber_weights = masterhdfdir+'matrices/model_'+MODELVERSION+'_huber_iteration_'
 
 
 """ MODEL/CALCULATION PARAMETERS """
@@ -143,10 +168,8 @@ datamap = dict(zip(names, range(len(names))))
 
 # breakpoint()
 
-dosmall = False
-if dosmall:
-    print("Small subset!")
-    data = da.vstack((da.from_array(f[name][()][0:1000000:100], chunks = CHUNKSIZE) for name in names))
+if do_modded_model:
+    data = da.vstack((da.from_array(f[name][()][indlets], chunks = CHUNKSIZE) for name in names))
 else:
     data = da.vstack((da.from_array(f[name], chunks = CHUNKSIZE) for name in names))
 ND = data.size/len(datamap) # number of datapoints
@@ -166,8 +189,8 @@ print( '%s - loaded data - %s points across %s arrays (dt = %.1f sec)' % (time.c
 #                        data[datamap['d2e'    ]].reshape((data.shape[1], 1)),
 #                        data[datamap['d2n'    ]].reshape((data.shape[1], 1)))
 # We don't need the poloidal stuff
-import warnings
-warnings.warn("You have not modified getG_torapex_dask to make sure that you're calculating the right stuff!")
+# import warnings
+# warnings.warn("You have not modified getG_torapex_dask to make sure that you're calculating the right stuff!")
 G0 = getG_torapex_dask(NT, MT, 
                        data[datamap['mlat'           ]].reshape((data.shape[1], 1)),
                    15* data[datamap['mlt'            ]].reshape((data.shape[1], 1)),
