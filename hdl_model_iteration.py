@@ -42,7 +42,7 @@ if dosmall:
 elif doonlynegbzsouth:
     MODELVERSION = 'v1BzNegNH'
     indfile = 'negbz_array_indices.txt'
-    print(f"Loading indices from file '{indfile}'")
+    print(f"Loading indices from file '{indfile}' (see journal__20210825__find_out_what_data_was_used_for_model_coeffs_based_on_slice_0_1000000_100__ie_10k_total_points.py)")
     indlets = np.int64(np.loadtxt(masterhdfdir+indfile))
     print(f"Got {len(indlets)} indices from file '{indfile}'")
 else:

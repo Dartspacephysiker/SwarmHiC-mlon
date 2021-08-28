@@ -3,12 +3,16 @@
 
 import numpy as np
 
-TRANSPOSEEM = True
+TRANSPOSEEM = False
 PRINTOUTPUT = False
 
-coeffdir = '/SPENCEdata/Research/database/SHEIC/matrices/10k_points/'
-coefffile = 'model_v1_values_iteration_3.npy'
-coefffile = 'model_v1_iteration_3.npy'
+# coeffdir = '/SPENCEdata/Research/database/SHEIC/matrices/'
+# coefffile = '10k_points/model_v1_values_iteration_3.npy'
+# coefffile = '10k_points/model_v1_iteration_3.npy'
+
+
+coeffdir = '/SPENCEdata/Research/database/SHEIC/matrices/'
+coefffile = 'model_v1BzNegNH_iteration_4.npy'
 
 if TRANSPOSEEM:
     outfile = coefffile.replace('.npy','_TRANSPOSE.txt')
@@ -160,6 +164,7 @@ for coscount in range(ncosterms):
     outf.write(thisline+'\n')
 
 outf.close()
+print("Made "+coeffdir+outfile)
 
 # tor_c_const               tor_s_const             
 # tor_c_sinca               tor_s_sinca             
