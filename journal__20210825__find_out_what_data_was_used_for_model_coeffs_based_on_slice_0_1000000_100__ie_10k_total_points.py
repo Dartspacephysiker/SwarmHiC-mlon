@@ -1,4 +1,6 @@
 import h5py
+import pandas as pd
+import numpy as np
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
 output       = 'modeldata_v1_update.hdf5' # where the data will be stored
 
@@ -24,25 +26,106 @@ choosef107 = 'f107obs'
 ext_columns = ['vx', 'Bz', 'By', choosef107, 'tilt']
 subsets = {}
 external = {}
-indies = slice(0,2000000)
-indies = slice(0,None)
+subinds = {}
+
+# indies = slice(0,None)
+# indies = slice(0,2000000)
+indies = slice(3000000,6000000)
+
+# Sub index for making model
+do_getsubinds = True
+# outindfile = 'negbz_array_indices.txt'
+outindfile = 'negby_array_indices.txt'
+outindfile = 'posby_array_indices.txt'
+outindfile = 'sortiment_array_indices.txt'
+# if do_getsubinds:
+#     if outindfile == 'negbz_array_indices.txt':
+#         indfunc = lambda full: np.where((full['mlat'] > 0 ) & \
+#                                         (full['Bz'] <= 0) & \
+#                                         (np.abs(full['tilt']) <= 10) & \
+#                                         ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
+
+#         # ~4% of entire database, 646620 indices
+#         #indlets.size/len(full)
+#         #Out[24]: 0.038931557476638776
+#     elif outindfile == 'negby_array_indices.txt':
+#         indfunc = lambda full: np.where((full['mlat'].abs() >= 45 ) & \
+#                                         (full['By'] <= 0) & \
+#                                         (np.abs(full['tilt']) <= 10) & \
+#                                         ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
+
+#     elif outindfile == 'posby_array_indices.txt':
+#         indfunc = lambda full: np.where((full['mlat'].abs() >= 45 ) & \
+#                                         (full['By'] >= 0) & \
+#                                         (np.abs(full['tilt']) <= 10) & \
+#                                         ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
+
+#     elif outindfile == 'sortiment_array_indices.txt':
+#         indfunc = lambda full: np.where((full['mlat'].abs() >= 45 ) & \
+#                                         # (full['By'] >= 0) & \
+#                                         (np.abs(full['tilt']) <= 10) & \
+#                                         ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
+
+#     else:
+#         assert 2<0
+
 for sat in sats:
     inputhdf = sat+f'_ct2hz_v{VERSION}{hdfsuff}.h5'
     print("Opening "+inputhdf)
     # stores[sat.replace('Sat_','')] = pd.HDFStore(masterhdfdir+inputhdf, 'r')
     with pd.HDFStore(masterhdfdir+inputhdf, 'r') as store:
 
+        # uses indies
+        # print("Getting main columns ... ",end='')
+        # tmpdf = pd.DataFrame()
+        # for wantcol in columns:
+        #     tmpdf[wantcol] = store['/'+wantcol].iloc[indies]
+        
+        # print("Getting ext columns ...",end='')
+        # tmpextdf = store.select('/external', columns = ext_columns).iloc[indies]
+
+        # print("Getting derived quantities ...")
+        # print("D",end=', ')
+        # D = np.sqrt( (store['d11']*store['d22']-store['d12']*store['d21'])**2 + \
+        #              (store['d12']*store['d20']-store['d10']*store['d22'])**2 + \
+        #              (store['d10']*store['d21']-store['d11']*store['d20'])**2).iloc[indies]
+        # tmpdf['D'] = D.values
+        # print("Be3_in_Tesla",end=', ')
+        # tmpdf['Be3_in_Tesla'] = store['B0IGRF'].iloc[indies]/D.values/1e9
+        # print("lperptoB_dot_ViyperptoB",end=', ')
+        # tmpdf['lperptoB_dot_ViyperptoB'] = store['/lperptoB_E'].iloc[indies]*store['/ViyperptoB_E'].iloc[indies]+\
+        #     store['/lperptoB_N'].iloc[indies]*store['/ViyperptoB_N'].iloc[indies]+\
+        #     store['/lperptoB_U'].iloc[indies]*store['/ViyperptoB_U'].iloc[indies]
+
+        # DOESN'T use indies
         print("Getting main columns ... ",end='')
         tmpdf = pd.DataFrame()
         for wantcol in columns:
-            tmpdf[wantcol] = store['/'+wantcol].iloc[indies]
+            tmpdf[wantcol] = store['/'+wantcol]
         
         print("Getting ext columns ...",end='')
-        tmpextdf = store.select('/external', columns = ext_columns).iloc[indies]
+        tmpextdf = store.select('/external', columns = ext_columns)
+
+        print("Getting derived quantities ...")
+        print("D",end=', ')
+        D = np.sqrt( (store['d11']*store['d22']-store['d12']*store['d21'])**2 + \
+                     (store['d12']*store['d20']-store['d10']*store['d22'])**2 + \
+                     (store['d10']*store['d21']-store['d11']*store['d20'])**2)
+        tmpdf['D'] = D.values
+        print("Be3_in_Tesla",end=', ')
+        tmpdf['Be3_in_Tesla'] = store['B0IGRF']/D.values/1e9
+        print("lperptoB_dot_ViyperptoB",end=', ')
+        tmpdf['lperptoB_dot_ViyperptoB'] = store['/lperptoB_E']*store['/ViyperptoB_E']+\
+            store['/lperptoB_N']*store['/ViyperptoB_N']+\
+            store['/lperptoB_U']*store['/ViyperptoB_U']
+
 
     subsets[sat] = tmpdf
     external[sat] = tmpextdf
     
+    # if do_getsubinds:
+    #     subinds[sat] = indfunc
+
 print ('adding satellite weights ...',end='')
 for sat in sats:
     # if sat in ['SwarmA', 'SwarmC']:
@@ -56,6 +139,7 @@ for sat in sats:
     subsets[sat][external[sat].columns] = external[sat]
     length = len(subsets[sat])
     subsets[sat] = subsets[sat].dropna()
+    # subsets[sat] = subsets[sat][subsets[sat][choosef107] <= 350]
     print ('dropped %s out of %s datapoints because of nans' % (length - len(subsets[sat]), length))
 
 print ('merging the subsets')
@@ -71,17 +155,41 @@ full['sat_identifier'] = full['sat'].map(satmap)
 full['time'] = np.float64(full['time'].values)
 
 # Sub index for making model
-do_getsubinds = True
-if do_getsubinds:
-    indlets = np.where((full['mlat'] > 0 ) & \
-                       (full['Bz'] <= 0) & \
-                       (np.abs(full['tilt']) <= 10) & \
-                       ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
-    # ~4% of entire database, 646620 indices
-    #indlets.size/len(full)
-    #Out[24]: 0.038931557476638776
 
-    outindfile = 'negbz_array_indices.txt'
+if do_getsubinds:
+    if outindfile == 'negbz_array_indices.txt':
+        indlets = np.where((full['mlat'] > 0 ) & \
+                           (full['Bz'] <= 0) & \
+                           (np.abs(full['tilt']) <= 10) & \
+                           ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
+        # ~4% of entire database, 646620 indices
+        #indlets.size/len(full)
+        #Out[24]: 0.038931557476638776
+    elif outindfile == 'negby_array_indices.txt':
+        indlets = np.where((full['mlat'].abs() >= 45 ) & \
+                           (full['By'] <= 0) & \
+                           (np.abs(full['tilt']) <= 10) & \
+                           ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
+
+    elif outindfile == 'posby_array_indices.txt':
+        indlets = np.where((full['mlat'].abs() >= 45 ) & \
+                           (full['By'] >= 0) & \
+                           (np.abs(full['tilt']) <= 10) & \
+                           ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
+
+    elif outindfile == 'sortiment_array_indices.txt':
+        indlets = np.where((full['mlat'].abs() >= 45 ) & \
+                           # (full['By'] >= 0) & \
+                           (np.abs(full['tilt']) <= 10) & \
+                           ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
+
+    else:
+        assert 2<0
+
+    # if indies.start > 0:
+    #     print(f"Adding indies.start (= {indies.start}) to indlets")
+    #     indlets += indies.start
+
     print(f"Saving {len(indlets)} indices to outindfile '{outindfile}'")
     np.savetxt(masterhdfdir+outindfile,indlets,fmt='%d')
 
