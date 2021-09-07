@@ -18,17 +18,20 @@ sats = ['Sat_A','Sat_B']
 
 VERSION = '0302'
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
-hdfsuff = '_5sres'
+hdfsuff = '_5sres_allmlat'
+# hdfsuff = '_5sres'
 # hdfsuff = '_1sres'
 # hdfsuff = '_Anna'
 # hdfsuff = '_Anna2'
 # hdfsuff = '_2014'
 
-
-if hdfsuff == '_5sres':
+if hdfsuff == '_5sres_allmlat':
     y1 = '2013'
     y2 = '2021'
-if hdfsuff == '_1sres':
+elif hdfsuff == '_5sres':
+    y1 = '2013'
+    y2 = '2021'
+elif hdfsuff == '_1sres':
     y1 = '2013'
     y2 = '2021'
 elif hdfsuff == '_Anna':

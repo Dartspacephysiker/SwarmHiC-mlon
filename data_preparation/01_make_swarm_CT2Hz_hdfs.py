@@ -52,13 +52,25 @@ mode = '2014'
 mode = 'fulldb_5sres'
 # mode = 'fulldb_1sres'
 
-VALIDMODES = ['fulldb_5sres','fulldb_1sres','Annadb','Annadb2','2014']
+# mode = 'fulldb_5sres'
+mode = 'fulldb_5sres_allmlat'   # This is OK because of what's in data_preparation/journal__20210907__why_its_OK_to_use_all_CT2Hz_latitudes_with_modified_apex_coords.py
+
+VALIDMODES = ['fulldb_5sres_allmlat','fulldb_5sres','fulldb_1sres','Annadb','Annadb2','2014']
 
 # sats = ['Sat_A','Sat_B','Sat_C']
 sats = ['Sat_A','Sat_B']
 # sats = ['Sat_B','Sat_C']
 
 assert mode in VALIDMODES,"Must choose one of " + ",".join(VALIDMODES)+"!"
+
+if mode == 'fulldb_5sres_allmlat':
+    hdfsuff = '_5sres_allmlat'
+
+    decimationfactor = 10           # so 5-s resolution
+    mlatlowlim = 0
+
+    date0 = '2013-12-01 00:00:00'
+    date1 = '2021-01-01 00:00:00'
 
 if mode == 'fulldb_5sres':
     hdfsuff = '_5sres'

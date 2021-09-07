@@ -19,6 +19,7 @@ sats = ['Sat_A','Sat_B']
 satmap = {'Sat_A':1, 'Sat_B':2}
 VERSION = '0302'
 hdfsuff = '_5sres'
+# hdfsuff = '_5sres_allmlat'
 
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
 datapath = '/SPENCEdata/Research/database/SHEIC/'

@@ -155,7 +155,7 @@ full['sat_identifier'] = full['sat'].map(satmap)
 full['time'] = np.float64(full['time'].values)
 
 # Sub index for making model
-
+breakpoint()
 if do_getsubinds:
     if outindfile == 'negbz_array_indices.txt':
         indlets = np.where((full['mlat'] > 0 ) & \
