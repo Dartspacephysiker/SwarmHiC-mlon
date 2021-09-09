@@ -35,6 +35,8 @@ doonlynegby = False
 doonlyposby = False
 doassortment = True
 
+DEWEIGHT_BELOW_55DEGMLAT = True
+
 do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment
 
 MODELVERSION = 'v1noparms_mV_per_m'
@@ -66,6 +68,10 @@ elif doassortment:
     MODELVERSION = MODELVERSION+'Sortiment'
     indfile = 'sortiment_array_indices.txt'
     modded_Nsubinds = 300000
+
+if DEWEIGHT_BELOW_55DEGMLAT:
+    MODELVERSION += '_deweight_below_55deg'
+    print("Deweighting for |mlat| < 55°")
 
 if do_modded_model:
     print(f"Loading indices from file '{indfile}' (see journal__20210825__find_out_what_data_was_used_for_model_coeffs_based_on_slice_0_1000000_100__ie_10k_total_points.py)")
@@ -205,6 +211,9 @@ def itersolve(filename):
 ##################################
 f = h5py.File(datafile, 'r')['/data']
 
+# Name of column that gives left-hand side of matrix equation d = Gm 
+LHcol = 'lperptoB_dot_ViyperptoB'
+
 # make a 2D array, one row for each item, and make a dictionary to map between the row and its name
 names = [item[0] for item in f.items()]
 datamap = dict(zip(names, range(len(names))))
@@ -218,23 +227,25 @@ else:
 ND = data.size/len(datamap) # number of datapoints
 print( '%s - loaded data - %s points across %s arrays (dt = %.1f sec)' % (time.ctime(), ND, len(datamap), time.time() - t0))
 
-# G0 = getG_torapex_dask(NT, MT, NV, MV,
-#                        data[datamap['qdlat'  ]].reshape((data.shape[1], 1)),
-#                        data[datamap['alat110']].reshape((data.shape[1], 1)),
-#                    15* data[datamap['mlt'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['h'      ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f1e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f1n'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f2e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f2n'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d1e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d1n'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d2e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d2n'    ]].reshape((data.shape[1], 1)))
-# We don't need the poloidal stuff
+###########
+#Code for de-weighting measurements at |mlat| <= 55°
+if DEWEIGHT_BELOW_55DEGMLAT:
+
+    deweightfactor = 0.1
+    print(f"Multiplying s_weight for measurements below 55° MLat by {deweightfactor}, and setting measurements to zero")
+
+    # De-weight stuff below 55° mlat
+    # hvor = da.where(da.less(da.absolute(data[datamap['mlat']]),55))[0].compute()
+    # hvor = da.less(da.absolute(data[datamap['mlat']]),55).compute()
+    # data[datamap['s_weight'],hvor] = da.multiply(data[datamap['s_weight'],hvor],deweightfactor).compute()
+    
+    data[datamap['s_weight']] = da.where(da.less(da.absolute(data[datamap['mlat']]),55),data[datamap['s_weight']],data[datamap['s_weight']]*deweightfactor)
+
+    data[datamap[LHcol]] = da.where(da.less(da.absolute(data[datamap['mlat']]),55),0,data[datamap[LHcol]])
+
+
+
 import warnings
-# warnings.warn("You have not modified getG_torapex_dask to make sure that you're calculating the right stuff!")
-# warnings.warn("2021/09/01 You have modified getG_torapex_dask so that RR is left in km (and hopefully potential in kV)!")
 warnings.warn("2021/09/01 You have modified getG_torapex_dask so that coeffs have units mV/m (I hope!)")
 warnings.warn("2021/09/02 Kalle says regularization is currently based on magnetic energy integrated over the entire globe/sphere. This can't be right for the electric potential, so we need to think about it. ('Vi må heller tenke på hva våre antagelser om potensialet er, og formulere dette matematisk (ikke lett!)')")
 
@@ -242,7 +253,7 @@ G0 = getG_torapex_dask(NT, MT,
                        data[datamap['mlat'           ]].reshape((data.shape[1], 1)),
                    15* data[datamap['mlt'            ]].reshape((data.shape[1], 1)),
                        data[datamap['Be3_in_Tesla'   ]].reshape((data.shape[1], 1)),
-                       # data[datamap['B0IGRF'         ]].reshape((data.shape[1], 1)),
+                       # data[datamap['B0IGRF'         ]].reshape((data.shape[1], 1)),x
                        # data[datamap['d10'            ]].reshape((data.shape[1], 1)),
                        # data[datamap['d11'            ]].reshape((data.shape[1], 1)),
                        # data[datamap['d22'            ]].reshape((data.shape[1], 1)),
@@ -256,8 +267,7 @@ G0 = G0.rechunk((G0.chunks[0], G0.shape[1]))
 print( '%s - done computing G0 matrix graph. G0 shape is %s (dt = %.1f sec)' % (time.ctime(), G0.shape, time.time() - t0))
 
 # data vector:
-# d = da.hstack(tuple(data[datamap[key]] for key in ['Be', 'Bn', 'Bu']))
-d = da.hstack(tuple(data[datamap[key]] for key in ['lperptoB_dot_ViyperptoB']))
+d = da.hstack(tuple(data[datamap[key]] for key in [LHcol]))
 d = d.reshape((d.size, 1)) # to column
 print( '%s - made d vector (dt = %.1f sec)' % (time.ctime(), time.time() - t0))
 
@@ -294,7 +304,7 @@ opts__threadpool=dict(MAXNTHREAD = 1,USER_API = 'blas')
 print("THREADPOOL OPTIONS")
 print("==================")
 for key,item in opts__threadpool.items():
-    print(f"{:15s}: {item}")
+    print(f"{key:15s}: {item}")
 
 print("")
 print("Entering loop ...")
