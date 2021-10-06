@@ -61,6 +61,6 @@ def download_omni_1min(fromYear,toYear,monthFirstYear=1,monthLastYear=12):
 if __name__ == "__main__":
 
     fromYear = 2013
-    toYear = 2021
+    toYear = 2022
     print(f"Downloading OMNI data from {fromYear} to {toYear}")
     download_omni_1min(fromYear,toYear,monthFirstYear=1,monthLastYear=12)

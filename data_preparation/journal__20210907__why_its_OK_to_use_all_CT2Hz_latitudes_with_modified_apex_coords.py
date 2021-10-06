@@ -1,8 +1,9 @@
+import numpy as np
+import apexpy
+from datetime import datetime
 lats = np.r_[-60:60]
 lons = np.r_[0:360:1]
 LAT,LON = np.meshgrid(lats,lons)
-import apexpy
-from datetime import datetime
 a = apexpy.Apex(datetime(2020,1,1),110)
 swarmalt = 500
 mlat,mlon = a.geo2apex(LAT,LON,swarmalt)

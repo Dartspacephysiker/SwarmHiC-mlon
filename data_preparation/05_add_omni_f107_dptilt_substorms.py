@@ -18,8 +18,8 @@ sats = ['Sat_A','Sat_B']
 
 VERSION = '0302'
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
-hdfsuff = '_5sres_allmlat'
-# hdfsuff = '_5sres'
+# hdfsuff = '_5sres_allmlat'
+hdfsuff = '_5sres'
 # hdfsuff = '_1sres'
 # hdfsuff = '_Anna'
 # hdfsuff = '_Anna2'

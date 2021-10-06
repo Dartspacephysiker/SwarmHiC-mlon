@@ -31,6 +31,7 @@ import os
 # Define which satellites we'll look for during which years 
 
 sats = ['Sat_A','Sat_B','Sat_C']
+sats = ['Sat_A','Sat_B']
 # y0,y1 = 2013,2021
 # years = [str(val) for val in np.arange(y0,y1)]
 

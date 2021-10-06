@@ -28,15 +28,18 @@ The Penticton data set comes also with the observed radio flux.
 '''
 
 filepath = '/SPENCEdata/Research/database/SHEIC/'
+filename_penticton= 'penticton_radio_flux.csv'
 
 ##Penticton
-time_stamp = '2021-02-05T08:41:00.000Z'#arbitrary time, it automatically chooses the last available
-file_url_penticton = 'https://lasp.colorado.edu/lisird/latis/dap/penticton_radio_flux.csv?&time>=1947-01-01T00:00:00.000Z&time<=' + time_stamp
+END_TIME = '2021-11-05T08:41:00.000Z'#
+
+# file_url_penticton = 'https://lasp.colorado.edu/lisird/latis/dap/penticton_radio_flux.csv?&time>=1947-01-01T00:00:00.000Z&time<=' + END_TIME
+file_url_penticton = 'https://lasp.colorado.edu/lisird/latis/dap/penticton_radio_flux.csv?&time>=2010-01-01T00:00:00.000Z&time<=' + END_TIME
+
 #filepath=input('Where would you like to save the data: \n')
-filename_penticton= 'penticton_radio_flux.csv'
 filedata = requests.get(file_url_penticton)
 open(filepath + filename_penticton, 'wb').write(filedata.content)
-print('Penticton file downloaded...')
+print('FINISHED downloading Penticton file ...')
 
 #print(1/0)
 '''

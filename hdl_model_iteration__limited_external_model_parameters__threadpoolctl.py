@@ -35,7 +35,7 @@ doonlynegby = False
 doonlyposby = False
 doassortment = True
 
-DEWEIGHT_BELOW_55DEGMLAT = True
+DEWEIGHT_BELOW_55DEGMLAT = False
 
 do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment
 
@@ -109,7 +109,8 @@ NEQ = nterms(NT, MT, NV, MV)
 
 if 'onlyca' in MODELVERSION:
     NWEIGHTS = 3
-    CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY ONE WEIGHT
+    # CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY THREE WEIGHTS
+    CHUNKSIZE = 5 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY THREE WEIGHTS
 elif 'noparms' in MODELVERSION:
     NWEIGHTS = 1
     CHUNKSIZE = 200 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY ONE WEIGHT
@@ -300,7 +301,8 @@ weights = weights.T  # tile them and transpose, shape is (Nmeas, NWEIGHTS)
 weights = weights.rechunk((G0.chunks[0], NWEIGHTS))
 
 # breakpoint()
-opts__threadpool=dict(MAXNTHREAD = 1,USER_API = 'blas')
+# opts__threadpool=dict(MAXNTHREAD = 1,USER_API = 'blas') #OLD
+opts__threadpool=dict(limits=dict(blas=1, openmp=1))
 print("THREADPOOL OPTIONS")
 print("==================")
 for key,item in opts__threadpool.items():
@@ -308,7 +310,8 @@ for key,item in opts__threadpool.items():
 
 print("")
 print("Entering loop ...")
-with threadpool_limits(limits=opts__threadpool['MAXNTHREAD'], user_api=opts__threadpool['USER_API']):
+# with threadpool_limits(limits=opts__threadpool['MAXNTHREAD'], user_api=opts__threadpool['USER_API']): #OLD
+with threadpool_limits(**opts__threadpool):
 
     while True: # enter loop
         #########################################################################

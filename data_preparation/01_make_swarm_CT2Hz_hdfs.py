@@ -52,8 +52,11 @@ mode = '2014'
 mode = 'fulldb_5sres'
 # mode = 'fulldb_1sres'
 
-# mode = 'fulldb_5sres'
-mode = 'fulldb_5sres_allmlat'   # This is OK because of what's in data_preparation/journal__20210907__why_its_OK_to_use_all_CT2Hz_latitudes_with_modified_apex_coords.py
+mode = 'fulldb_5sres'
+
+# mode = 'fulldb_5sres_allmlat'   # This is OK (i.e., you won't get NaNs back) because of what's in data_preparation/journal__20210907__why_its_OK_to_use_all_CT2Hz_latitudes_with_modified_apex_coords.py
+                                  # HOWEVER: Keep in mind that QDLatitude will comfortably go all the way to 0 at the Equator, whereas Modified Apex latitude (which is what you use) doesn't go below ~13°, and I'm not sure it's meaningful.
+                                  #(Just because it's not a NaN doesn't mean it's not garbage, right?)
 
 VALIDMODES = ['fulldb_5sres_allmlat','fulldb_5sres','fulldb_1sres','Annadb','Annadb2','2014']
 
@@ -78,8 +81,12 @@ if mode == 'fulldb_5sres':
     decimationfactor = 10           # so 5-s resolution
     mlatlowlim = 45
 
-    date0 = '2013-12-01 00:00:00'
-    date1 = '2021-01-01 00:00:00'
+    # date0 = '2013-12-01 00:00:00'
+    # date1 = '2022-01-01 00:00:00'
+
+    # Just update
+    date0 = '2020-12-31 00:00:00'
+    date1 = '2022-01-01 00:00:00'
 
 if mode == 'fulldb_1sres':
     hdfsuff = '_1sres'
@@ -145,8 +152,8 @@ from swarmProcHelper import processSwarm2HzCrossTrackZip
 date0 = datetime.strptime(date0,"%Y-%m-%d %H:%M:%S")
 date1 = datetime.strptime(date1,"%Y-%m-%d %H:%M:%S")
 
-dates = pd.date_range(start=date0,end=date1,freq='1D')
-dates = [dato.strftime("%Y%m%d") for dato in dates]
+# dates = pd.date_range(start=date0,end=date1,freq='1D')
+# dates = [dato.strftime("%Y%m%d") for dato in dates]
 
 ########################################
 # function definitions
@@ -245,6 +252,8 @@ for sat in sats:
             if np.sum((mastertimes >= tidrange[0]) & (mastertimes <= tidrange[1])):
                 print(f"Already have {os.path.basename(fila)}! Continue ...")
                 continue
+            else:
+                print(f"Adding {os.path.basename(fila)} to the mix ...")
 
         df = processSwarm2HzCrossTrackZip(dirrie, os.path.basename(fila), localdir,
                                           doResample=False,
