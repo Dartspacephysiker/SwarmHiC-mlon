@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# Here we open up all the .cdf.zip files and put their contents, along with some stuff in Modified Apex-110 coordinates, into an HDF file.
+# 01_make_swarm_CT2Hz_hdfs.py          : Here we open up all the .cdf.zip files and put their contents, along with some stuff in Modified Apex-110 coordinates, into an HDF file.
 # 02_f107_download_and_filter.py       : Add F10.7
 # 03_omni_download_1min_data.py        : Download OMNI data (IMF components, solar wind speed and density, SYM-H, + others?
 # 04_omni_process_1min_data.py         : Process OMNI data (calculate IMF clock angle mean,variance, average over 30-min window, etc.)
@@ -12,7 +12,9 @@
 #                                         'yhat_d1', 'yhat_d2',
 #                                         'yhat_f1', 'yhat_f2',
 #                                         'gdlat', 'alt']
-
+# 07_make_model_dataset.py             : read HDF store files, calculate all the weights,
+#                                        (optionally) retain only measurements with a particular quality flag,
+#                                        and then store weights, coordinates, and measurements in  a format that can be streamed (using dask)
 
 # From swarmProcHelper.processSwarm2HzCrossTrackZip you get the following:
 # 'Bx','By','Bz',

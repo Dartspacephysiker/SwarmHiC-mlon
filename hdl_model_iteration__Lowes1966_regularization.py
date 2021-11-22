@@ -1,4 +1,5 @@
 """
+0) NOTE: If wanting to use ALL measurements and derive FULL model, use doFINAL = True under "Select which type of model"
 1) load data file and set up G0
 2) load model vector and model values from iteration i
 3) calculate huber weights
@@ -8,7 +9,8 @@
 7) go back to (2), unless ||model i + 1|| is close to ||model i||
 """
 
-# 2021/11/20 WORKS!
+# 2021/11/22 WORKS!
+# 
 
 import numpy as np
 import dask.array as da
@@ -23,10 +25,17 @@ from gtg_array_utils import weighted_GTd_GTG_array, expand_GTG_and_GTd
 from functools import reduce
 # from hdl_model_iteration_helpers import itersolve, iterhuber
 
+MACHINE = 'Kalles'
+MACHINE = 'SpencersLaptop'
+
+assert MACHINE in ['KallesTower','SpencersLaptop']
 
 t0 = time.time()
 
-masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
+if MACHINE == 'KallesTower':
+    masterhdfdir = '/scratch/spencer/SHEIC/'
+elif MACHINE == 'SpencersLaptop':
+    masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
 
 DATAVERSION = 'v1'
 DATAVERSION = 'v2'                                       # 2021/11/19
@@ -39,16 +48,22 @@ doonlynegby = False
 doonlyposby = False
 doassortment = False
 doalldptilt = True
+doFINAL = True                 # Use ALL data, all model parameters
+
 
 do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
 
-MODELVERSION = DATAVERSION+'noparms_mV_per_m'
-MODELVERSION = DATAVERSION+'noparms_mV_per_m_lillambda'
 # MODELVERSION = DATAVERSION+'onlyca'
 MODELVERSION = DATAVERSION+'onlyca_mV_per_m_lillambda'
 
 # 2021/11/20 TRY ALL MODEL PARAMS (still mV per m, just junking the unnecessary suffix)
 MODELVERSION = DATAVERSION+'ALLPARAMS'
+
+if doFINAL:
+    MODELVERSION = DATAVERSION+'FINAL'
+    # if MACHINE == 'KallesTower':
+    if MACHINE == 'SpencersLaptop':
+        assert 2 < 0,"You have set MACHINE == 'SpencersLaptop'. You should not be using a laptop to calculate the full model coefficients."
 
 
 modded_subinds = None
@@ -71,18 +86,14 @@ elif doassortment:
     #                    # (full['By'] >= 0) & \
     #                    (np.abs(full['tilt']) <= 10) & \
     #                    ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
-
     MODELVERSION = MODELVERSION+'Sortiment'
     indfile = 'sortiment_array_indices.txt'
     modded_Nsubinds = 300000
-
 elif doalldptilt:
     # 20211120 indices that include all dipole tilts, limited range of 
     indfile = 'alldptilt_array_indices.txt'
     modded_Nsubinds = 900000
-
     randomseednumber = 123
-
     MODELVERSION = MODELVERSION+f'Alldptilt_{randomseednumber:d}'
 
 if do_modded_model:
@@ -115,20 +126,22 @@ NT, MT = 65, 3
 NV, MV = 0, 0
 NEQ = nterms(NT, MT, NV, MV)
 
-# NWEIGHTS = 19
-# CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, KALLE'S ORIG
-# 
-
-if 'onlyca' in MODELVERSION:
-    NWEIGHTS = 3
-    CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY ONE WEIGHT
-elif 'noparms' in MODELVERSION:
-    NWEIGHTS = 1
-    CHUNKSIZE = 200 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY ONE WEIGHT
-else:
+if doFINAL:
     NWEIGHTS = 19
-    CHUNKSIZE = 2 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, REDUCED for my laptop
+    CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, KALLE'S ORIG
+    
+else:
 
+    if 'onlyca' in MODELVERSION:
+        NWEIGHTS = 3
+        CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY ONE WEIGHT
+    elif 'noparms' in MODELVERSION:
+        NWEIGHTS = 1
+        CHUNKSIZE = 200 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY ONE WEIGHT
+    else:
+        NWEIGHTS = 19
+        CHUNKSIZE = 2 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, REDUCED for my laptop
+    
 print(f"NWEIGHTS, CHUNKSIZE: {NWEIGHTS}, {CHUNKSIZE}")
 K = 5 # how many chunks shall be calculated at once
 
@@ -199,6 +212,7 @@ def itersolve(filename):
             #                 lambda_V * n_cos_V  * (n_cos_V  + 1.)                 , lambda_V * n_sin_V  * (n_sin_V  + 1.)                 )).flatten()
             # nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.))).flatten()
             
+            # Regularization based on total power in the electric field (Lowes, 1966)
             nn = np.hstack((lambda_T * (n_cos_T  + 1.), lambda_T  * (n_sin_T  + 1.))).flatten()
 
             nn = np.tile(nn, NWEIGHTS)
