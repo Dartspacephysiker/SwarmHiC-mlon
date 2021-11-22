@@ -27,10 +27,10 @@ hdfsuff = '_5sres'
 
 if hdfsuff == '_5sres_allmlat':
     y1 = '2013'
-    y2 = '2021'
+    y2 = '2022'
 elif hdfsuff == '_5sres':
     y1 = '2013'
-    y2 = '2021'
+    y2 = '2022'
 elif hdfsuff == '_1sres':
     y1 = '2013'
     y2 = '2021'

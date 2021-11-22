@@ -12,6 +12,7 @@ NEQ = nterms(NT, MT, NV, MV)
 
 
 output = 'modeldata_v1_update.hdf5' # where the data will be stored
+output = 'modeldata_v2_update.hdf5' # where the data will be stored, version created 20211119 with CT2Hz data through 2021/08
 
 # satellites = ['SwarmA', 'SwarmB']
 # satmap = {'CHAMP':1, 'SwarmA':2, 'SwarmB':3, 'SwarmC':4}
@@ -23,6 +24,20 @@ hdfsuff = '_5sres'
 
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
 datapath = '/SPENCEdata/Research/database/SHEIC/'
+
+##############################
+# Quality flag enforcement
+##############################
+# Do you want to only include measurements with a certain quality flag?
+# For data version 0302, the second bit ('0100') being set means that v_(i,y) is calibrated
+# See section 3.4.1.1 in "EFI TII Cross-Track Flow Data Release Notes" (Doc. no: SW-RN-UOC-GS-004, Rev: 7)
+enforce_quality_flag = True     
+quality_flag = '0100'
+
+# For example, as of 20211119 if you do the following with
+#store = pd.HDFStore('Sat_A_ct2hz_v0302_5sres.h5','r'),
+#you get '9047089' back:
+#np.sum((store['/Quality_flags'].values & int(quality_flag,2)) > 0)
 
 
 # Here's the proof that we can use lperptoB_dot_ViyperptoB as the LHS of Eq (7) in 'SHEIC DERIVATION'
@@ -43,6 +58,8 @@ columns = ['mlat', 'mlt','lperptoB_dot_e1','lperptoB_dot_e2']
 choosef107 = 'f107obs'
 print("Should you use 'f107obs' or 'f107adj'??? Right now you use "+choosef107)
 ext_columns = ['vx', 'Bz', 'By', choosef107, 'tilt']
+
+# Derived columns: ["lperptoB_dot_ViyperptoB","Be3_in_Tesla","D"]
 
 # put the satellite data in a dict of dataframes:
 subsets = {}
@@ -84,6 +101,18 @@ for sat in sats:
         print("OK!")
         # subsets[sat]  = store.select('/apex_data', columns = columns)
         # external[sat] = store.select(sat + '/external', columns = ext_columns)
+
+        if enforce_quality_flag:
+
+            print(f"Dropping records that do not have Quality_flag == {quality_flag} ...")
+
+            nNow = len(tmpdf)
+            tmpdf = tmpdf[(store['/Quality_flags'].values & int(quality_flag,2)) > 0]
+            nLater = len(tmpdf)
+            
+            print(f"Dropped {nNow-nLater} of {nNow} records ({(nNow-nLater)/nNow*100}%)")
+
+
         subsets[sat]  = tmpdf
         external[sat] = tmpextdf
 
@@ -115,7 +144,7 @@ print ('calculating weights')
 B = np.sqrt(full['By']**2 + full['Bz']**2)
 ca = np.arctan2(full['By'], full['Bz'])
 epsilon = full['vx'].abs()**(4/3.) * B**(2/3.) * (np.sin(ca/2)**(8))**(1/3.) / 1000 # mV/m # Newell coupling
-tau     = full['vx'].abs()**(4/3.) * B**(2/3.) * (np.cos(ca/2)**(8))**(1/3.) / 1000 # mV/m # Newell coupling
+tau     = full['vx'].abs()**(4/3.) * B**(2/3.) * (np.cos(ca/2)**(8))**(1/3.) / 1000 # mV/m # "anti"(?)-Newell coupling
 f107    = full[choosef107]
 tilt = full['tilt']
 full['w01' ] = 1              * np.sin(ca)

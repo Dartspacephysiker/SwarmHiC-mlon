@@ -30,7 +30,7 @@ datapath = '/SPENCEdata/Research/database/SHEIC/'
 
 OMNIPERIOD = '20Min'
 y1OMNI = '2013'
-y2OMNI = '2021'
+y2OMNI = '2022'
 
 getcols = ['Bx','By','Bz',
            'Quality_flags',

@@ -8,6 +8,7 @@
 7) go back to (2), unless ||model i + 1|| is close to ||model i||
 """
 
+# 2021/11/20 WORKS!
 
 import numpy as np
 import dask.array as da
@@ -17,25 +18,40 @@ import h5py
 import sys
 from scipy.linalg import cholesky, cho_solve
 from dask.diagnostics import ProgressBar
-from utils import nterms, SHkeys, getG_torapex_dask
+from utils import nterms, SHkeys, getG_torapex_dask, make_model_coeff_txt_file
 from gtg_array_utils import weighted_GTd_GTG_array, expand_GTG_and_GTd
 from functools import reduce
-from hdl_model_iteration_helpers import itersolve
+# from hdl_model_iteration_helpers import itersolve, iterhuber
 
 
 t0 = time.time()
 
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
-output       = 'modeldata_v1_update.hdf5' # where the data will be stored
 
-datafile             = masterhdfdir+'modeldata_v1_update.hdf5'
+DATAVERSION = 'v1'
+DATAVERSION = 'v2'                                       # 2021/11/19
+datafile       = masterhdfdir+f'modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
 
+## Select which type of model
 dosmall = False
-doonlynegbzsouth = True
+doonlynegbzsouth = False
+doonlynegby = False
+doonlyposby = False
+doassortment = False
+doalldptilt = True
 
-do_modded_model = dosmall or doonlynegbzsouth
+do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
 
-MODELVERSION = 'v1'
+MODELVERSION = DATAVERSION+'noparms_mV_per_m'
+MODELVERSION = DATAVERSION+'noparms_mV_per_m_lillambda'
+# MODELVERSION = DATAVERSION+'onlyca'
+MODELVERSION = DATAVERSION+'onlyca_mV_per_m_lillambda'
+
+# 2021/11/20 TRY ALL MODEL PARAMS (still mV per m, just junking the unnecessary suffix)
+MODELVERSION = DATAVERSION+'ALLPARAMS'
+
+
+modded_subinds = None
 if dosmall:
     MODELVERSION = MODELVERSION+'small'
     indlets = slice(0,1000000,100)
@@ -44,9 +60,41 @@ if dosmall:
 elif doonlynegbzsouth:
     MODELVERSION = MODELVERSION+'BzNegNH'
     indfile = 'negbz_array_indices.txt'
+elif doonlynegby:
+    MODELVERSION = MODELVERSION+'ByNeg'
+    indfile = 'negby_array_indices.txt'
+elif doonlyposby:
+    MODELVERSION = MODELVERSION+'ByPos'
+    indfile = 'posby_array_indices.txt'
+elif doassortment:
+    # indlets = np.where((full['mlat'].abs() >= 45 ) & \
+    #                    # (full['By'] >= 0) & \
+    #                    (np.abs(full['tilt']) <= 10) & \
+    #                    ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
+
+    MODELVERSION = MODELVERSION+'Sortiment'
+    indfile = 'sortiment_array_indices.txt'
+    modded_Nsubinds = 300000
+
+elif doalldptilt:
+    # 20211120 indices that include all dipole tilts, limited range of 
+    indfile = 'alldptilt_array_indices.txt'
+    modded_Nsubinds = 900000
+
+    randomseednumber = 123
+
+    MODELVERSION = MODELVERSION+f'Alldptilt_{randomseednumber:d}'
+
+if do_modded_model:
     print(f"Loading indices from file '{indfile}' (see journal__20210825__find_out_what_data_was_used_for_model_coeffs_based_on_slice_0_1000000_100__ie_10k_total_points.py)")
     indlets = np.int64(np.loadtxt(masterhdfdir+indfile))
     print(f"Got {len(indlets)} indices from file '{indfile}'")
+
+    if modded_Nsubinds is not None:
+        # modded_Nsubinds = 300000
+        print(f"Trimming loaded indices by grabbing {modded_Nsubinds} random indices")
+        np.random.seed(randomseednumber)
+        indlets = np.random.choice(indlets,modded_Nsubinds,replace=False)
 
 print("******************************")
 print(f"MODEL VERSION: {MODELVERSION}")
@@ -66,11 +114,23 @@ NT, MT = 65, 3
 # NV, MV = 45, 3
 NV, MV = 0, 0
 NEQ = nterms(NT, MT, NV, MV)
-NWEIGHTS = 19
-CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, KALLE'S ORIG
-CHUNKSIZE = 2 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights
-K = 5 # how many chunks shall be calculated at once
 
+# NWEIGHTS = 19
+# CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, KALLE'S ORIG
+# 
+
+if 'onlyca' in MODELVERSION:
+    NWEIGHTS = 3
+    CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY ONE WEIGHT
+elif 'noparms' in MODELVERSION:
+    NWEIGHTS = 1
+    CHUNKSIZE = 200 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY ONE WEIGHT
+else:
+    NWEIGHTS = 19
+    CHUNKSIZE = 2 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, REDUCED for my laptop
+
+print(f"NWEIGHTS, CHUNKSIZE: {NWEIGHTS}, {CHUNKSIZE}")
+K = 5 # how many chunks shall be calculated at once
 
 N_NUM = NEQ*(NEQ+1)//2*NWEIGHTS*(NWEIGHTS+1)//2 + NEQ*NWEIGHTS # number of unique elements in GTG and GTd (derived quantity - do not change)
 
@@ -114,41 +174,46 @@ def huber(array, k = 1.5, inmean = None, instd = None):
 
     return hmean, hstd
 
-# def itersolve(filename):
+def itersolve(filename):
 
-#     # make regularization matrix:
+    # make regularization matrix:
 
-#     # lambda_V = 0
-#     lambda_T = 1.e5
+    # lambda_V = 0
+    # lambda_T = 1.e5
+    lambda_T = 1.e4
+
+    lambda_T = 1.e2
     
-#     while True:
-#         # print( 'solving... with lambda_T = %s, lambda_V = %s' % (lambda_T, lambda_V))
-#         print( 'solving... with lambda_T = %s' % (lambda_T))
-#         try:
-#             # n_cos_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(0).n
-#             # n_sin_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(1).n
-#             n_cos_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(0).n
-#             n_sin_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(1).n
-#             GTd_GTG_num = np.load(filename)
-#             GTd, GTG = expand_GTG_and_GTd(GTd_GTG_num, NWEIGHTS, NEQ)
+    while True:
+        # print( 'solving... with lambda_T = %s, lambda_V = %s' % (lambda_T, lambda_V))
+        print( 'solving... with lambda_T = %s' % (lambda_T))
+        try:
+            # n_cos_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(0).n
+            # n_sin_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(1).n
+            n_cos_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(0).n
+            n_sin_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(1).n
+            GTd_GTG_num = np.load(filename)
+            GTd, GTG = expand_GTG_and_GTd(GTd_GTG_num, NWEIGHTS, NEQ)
             
-#             # nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.), 
-#             #                 lambda_V * n_cos_V  * (n_cos_V  + 1.)                 , lambda_V * n_sin_V  * (n_sin_V  + 1.)                 )).flatten()
-#             nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.))).flatten()
+            # nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.), 
+            #                 lambda_V * n_cos_V  * (n_cos_V  + 1.)                 , lambda_V * n_sin_V  * (n_sin_V  + 1.)                 )).flatten()
+            # nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.))).flatten()
             
-#             nn = np.tile(nn, NWEIGHTS)
-                     
-#             R = np.diag(nn)
-            
-#             c = cholesky(GTG + R, overwrite_a = True, check_finite = False)
-#             model_vector = cho_solve((c, 0), GTd)
-#             break # success!
-#         except:
-#             lambda_T *= 10 # increase regularization parameter by one order of magnitude
-#             gc.collect()
-#             continue
+            nn = np.hstack((lambda_T * (n_cos_T  + 1.), lambda_T  * (n_sin_T  + 1.))).flatten()
 
-#     return model_vector
+            nn = np.tile(nn, NWEIGHTS)
+                     
+            R = np.diag(nn)
+            
+            c = cholesky(GTG + R, overwrite_a = True, check_finite = False)
+            model_vector = cho_solve((c, 0), GTd)
+            break # success!
+        except:
+            lambda_T *= 5 # increase regularization parameter by a factor of five
+            gc.collect()
+            continue
+
+    return model_vector
 
 
 
@@ -189,8 +254,12 @@ print( '%s - loaded data - %s points across %s arrays (dt = %.1f sec)' % (time.c
 #                        data[datamap['d2e'    ]].reshape((data.shape[1], 1)),
 #                        data[datamap['d2n'    ]].reshape((data.shape[1], 1)))
 # We don't need the poloidal stuff
-# import warnings
+import warnings
 # warnings.warn("You have not modified getG_torapex_dask to make sure that you're calculating the right stuff!")
+# warnings.warn("2021/09/01 You have modified getG_torapex_dask so that RR is left in km (and hopefully potential in kV)!")
+warnings.warn("2021/09/01 You have modified getG_torapex_dask so that coeffs have units mV/m (I hope!)")
+warnings.warn("2021/09/02 Kalle says regularization is currently based on magnetic energy integrated over the entire globe/sphere. This can't be right for the electric potential, so we need to think about it. ('Vi må heller tenke på hva våre antagelser om potensialet er, og formulere dette matematisk (ikke lett!)')")
+
 G0 = getG_torapex_dask(NT, MT, 
                        data[datamap['mlat'           ]].reshape((data.shape[1], 1)),
                    15* data[datamap['mlt'            ]].reshape((data.shape[1], 1)),
@@ -220,11 +289,25 @@ s_weight = data[datamap['s_weight']]
 # s_weight = da.hstack((s_weight)) # stack once - one for each component
 
 # prepare matrix of weights (the external parameters)
-weights = da.vstack( tuple([data[datamap['w' + str(jj + 1).zfill(2)]] for jj in range(NWEIGHTS-1)]))
-weights = weights.astype(np.float32)
-weights = da.vstack((da.ones(weights.shape[1], chunks = weights[0].chunks), weights)) # add a 1 weight on top (c0)
+
+if NWEIGHTS > 1:
+    # OLD (multiple weights)
+    weights = da.vstack( tuple([data[datamap['w' + str(jj + 1).zfill(2)]] for jj in range(NWEIGHTS-1)]))
+    weights = weights.astype(np.float32)
+    weights = da.vstack((da.ones(weights.shape[1], chunks = weights[0].chunks), weights)) # add a 1 weight on top (c0)
+
+elif NWEIGHTS == 1:
+    # NEW (only constant weight term)
+    weights = da.ones(data[datamap['w01']].shape[0],chunks = data[0].chunks)
+    weights = weights.reshape((1,weights.shape[0]))
+
+else:
+    assert 2<0
+
+# Reshape 'em
 # weights = da.hstack((weights, weights, weights)).T # tile them and transpose, shape is (Nmeas*3, NWEIGHTS)
 weights = weights.T  # tile them and transpose, shape is (Nmeas, NWEIGHTS)
+
 # weights = da.hstack((weights)).T # tile them and transpose
 weights = weights.rechunk((G0.chunks[0], NWEIGHTS))
 
@@ -333,5 +416,10 @@ while True: # enter loop
     print( 'starting next iteration')
     
 
-
+coeff_fn = prefix_model_fn + str(i) + '.npy'
+make_model_coeff_txt_file(coeff_fn,
+                          NT=NT,MT=MT,
+                          NV=NV,MV=MV,
+                          TRANSPOSEEM=False,
+                          PRINTOUTPUT=False)
 print( 'done. DONE!!!')

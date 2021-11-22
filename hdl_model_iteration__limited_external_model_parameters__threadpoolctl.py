@@ -21,13 +21,15 @@ from utils import nterms, SHkeys, getG_torapex_dask, make_model_coeff_txt_file
 from gtg_array_utils import weighted_GTd_GTG_array, expand_GTG_and_GTd
 from functools import reduce
 from threadpoolctl import threadpool_limits
+#from hdl_model_iteration_helpers import itersolve, iterhuber
 
 t0 = time.time()
 
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
-output       = 'modeldata_v1_update.hdf5' # where the data will be stored
+inputfile    = 'modeldata_v1_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
+# inputfile    = 'modeldata_v2_update.hdf5' # Version with data through 2021/08, and '/Quality_flags' == 0 removed
 
-datafile     = masterhdfdir+'modeldata_v1_update.hdf5'
+datafile     = masterhdfdir+inputfile
 
 dosmall = False
 doonlynegbzsouth = False
@@ -163,13 +165,55 @@ def huber(array, k = 1.5, inmean = None, instd = None):
 
     return hmean, hstd
 
-def itersolve(filename):
+# def itersolve(filename,NV,MV,NT,MT,NWEIGHTS,NEQ):
+
+#     # make regularization matrix:
+
+#     # lambda_V = 0
+#     # lambda_T = 1.e5
+#     lambda_T = 1.e4
+#     lambda_T = 0.
+    
+#     while True:
+#         # print( 'solving... with lambda_T = %s, lambda_V = %s' % (lambda_T, lambda_V))
+#         print( 'solving... with lambda_T = %s' % (lambda_T))
+#         try:
+#             # n_cos_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(0).n
+#             # n_sin_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(1).n
+#             n_cos_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(0).n
+#             n_sin_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(1).n
+#             GTd_GTG_num = np.load(filename)
+#             GTd, GTG = expand_GTG_and_GTd(GTd_GTG_num, NWEIGHTS, NEQ)
+            
+#             # nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.), 
+#             #                 lambda_V * n_cos_V  * (n_cos_V  + 1.)                 , lambda_V * n_sin_V  * (n_sin_V  + 1.)                 )).flatten()
+#             # nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.))).flatten()
+            
+#             nn = np.hstack((lambda_T * (n_cos_T  + 1.), lambda_T * (n_sin_T  + 1.))).flatten()
+
+#             nn = np.tile(nn, NWEIGHTS)
+                     
+#             R = np.diag(nn)
+            
+#             c = cholesky(GTG + R, overwrite_a = True, check_finite = False)
+#             model_vector = cho_solve((c, 0), GTd)
+#             break # success!
+#         except:
+#             lambda_T *= 10 # increase regularization parameter by one order of magnitude
+#             gc.collect()
+#             continue
+
+#     return model_vector
+
+
+def itersolve(filename,NV,MV,NT,MT,NWEIGHTS,NEQ):
 
     # make regularization matrix:
 
     # lambda_V = 0
     # lambda_T = 1.e5
     lambda_T = 1.e4
+    lambda_T = 0.
     
     while True:
         # print( 'solving... with lambda_T = %s, lambda_V = %s' % (lambda_T, lambda_V))
@@ -184,22 +228,24 @@ def itersolve(filename):
             
             # nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.), 
             #                 lambda_V * n_cos_V  * (n_cos_V  + 1.)                 , lambda_V * n_sin_V  * (n_sin_V  + 1.)                 )).flatten()
-            nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.))).flatten()
+            # nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.))).flatten()
             
+            nn = np.hstack((lambda_T * (n_cos_T  + 1.), lambda_T * (n_sin_T  + 1.))).flatten()
+
             nn = np.tile(nn, NWEIGHTS)
                      
             R = np.diag(nn)
             
-            c = cholesky(GTG + R, overwrite_a = True, check_finite = False)
+            c = cholesky(GTG + R, overwrite_a = True, check_finite = True)
             model_vector = cho_solve((c, 0), GTd)
             break # success!
-        except:
+        except Exception as e:
+            print(e)
             lambda_T *= 10 # increase regularization parameter by one order of magnitude
             gc.collect()
             continue
 
     return model_vector
-
 
 
 
@@ -383,7 +429,8 @@ with threadpool_limits(**opts__threadpool):
         ###################################################################################
         # 5) solve - with the least possible regularization - and save model vector (i + 1)
         ###################################################################################
-        model_new = itersolve(prefix_GTd_GTG_fn + str(i) + '.npy')
+        model_new = itersolve(prefix_GTd_GTG_fn + str(i) + '.npy',
+                              NV,MV,NT,MT,NWEIGHTS,NEQ)
         np.save(prefix_model_fn + str(i) + '.npy', model_new)
         print( 'saved new model in %s' % (prefix_model_fn + str(i) + '.npy'))
         

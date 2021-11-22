@@ -20,27 +20,31 @@ from dask.diagnostics import ProgressBar
 from utils import nterms, SHkeys, getG_torapex_dask, make_model_coeff_txt_file
 from gtg_array_utils import weighted_GTd_GTG_array, expand_GTG_and_GTd
 from functools import reduce
+# from hdl_model_iteration_helpers import itersolve, iterhuber
 
 
 t0 = time.time()
 
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
-output       = 'modeldata_v1_update.hdf5' # where the data will be stored
 
-datafile     = masterhdfdir+'modeldata_v1_update.hdf5'
+DATAVERSION = 'v1'
+DATAVERSION = 'v2'                                       # 2021/11/19
+datafile       = masterhdfdir+f'modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
 
+## Select which type of model
 dosmall = False
 doonlynegbzsouth = False
 doonlynegby = False
 doonlyposby = False
-doassortment = True
+doassortment = False
+doalldptilt = True
 
-do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment
+do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
 
-MODELVERSION = 'v1noparms_mV_per_m'
-MODELVERSION = 'v1noparms_mV_per_m_lillambda'
-# MODELVERSION = 'v1onlyca'
-MODELVERSION = 'v1onlyca_mV_per_m_lillambda'
+MODELVERSION = DATAVERSION+'noparms_mV_per_m'
+MODELVERSION = DATAVERSION+'noparms_mV_per_m_lillambda'
+# MODELVERSION = DATAVERSION+'onlyca'
+MODELVERSION = DATAVERSION+'onlyca_mV_per_m_lillambda'
 
 modded_subinds = None
 if dosmall:
@@ -67,6 +71,15 @@ elif doassortment:
     indfile = 'sortiment_array_indices.txt'
     modded_Nsubinds = 300000
 
+elif doalldptilt:
+    # 20211120 indices that include all dipole tilts, limited range of 
+    indfile = 'alldptilt_array_indices.txt'
+    modded_Nsubinds = 900000
+
+    randomseednumber = 123
+
+    MODELVERSION = MODELVERSION+f'Alldptilt_{randomseednumber:d}'
+
 if do_modded_model:
     print(f"Loading indices from file '{indfile}' (see journal__20210825__find_out_what_data_was_used_for_model_coeffs_based_on_slice_0_1000000_100__ie_10k_total_points.py)")
     indlets = np.int64(np.loadtxt(masterhdfdir+indfile))
@@ -75,7 +88,7 @@ if do_modded_model:
     if modded_Nsubinds is not None:
         # modded_Nsubinds = 300000
         print(f"Trimming loaded indices by grabbing {modded_Nsubinds} random indices")
-        np.random.seed(123)
+        np.random.seed(randomseednumber)
         indlets = np.random.choice(indlets,modded_Nsubinds,replace=False)
 
 print("******************************")
@@ -163,6 +176,8 @@ def itersolve(filename):
     # lambda_V = 0
     # lambda_T = 1.e5
     lambda_T = 1.e4
+
+    lambda_T = 1.e3
     
     while True:
         # print( 'solving... with lambda_T = %s, lambda_V = %s' % (lambda_T, lambda_V))

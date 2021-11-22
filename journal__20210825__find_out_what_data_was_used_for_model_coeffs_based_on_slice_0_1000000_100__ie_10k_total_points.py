@@ -2,13 +2,30 @@ import h5py
 import pandas as pd
 import numpy as np
 masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
-output       = 'modeldata_v1_update.hdf5' # where the data will be stored
+# DATAVERSION = 'v1'
+DATAVERSION = 'v2'                                       # 2021/11/19
+inputfile       = f'modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
+datafile        = masterhdfdir+inputfile
 
-datafile             = masterhdfdir+'modeldata_v1_update.hdf5'
-prefix_GTd_GTG_fn    = masterhdfdir+'matrices/GTG_GTd_array_iteration_'
-prefix_model_fn      = masterhdfdir+'matrices/model_v1_iteration_'
-prefix_model_value   = masterhdfdir+'matrices/model_v1_values_iteration_'
-prefix_huber_weights = masterhdfdir+'matrices/model_v1_huber_iteration_'
+##############################
+# Quality flag enforcement
+##############################
+# Do you want to only include measurements with a certain quality flag?
+# For data version 0302, the second bit ('0100') being set means that v_(i,y) is calibrated
+# See section 3.4.1.1 in "EFI TII Cross-Track Flow Data Release Notes" (Doc. no: SW-RN-UOC-GS-004, Rev: 7)
+enforce_quality_flag = True     
+quality_flag = '0100'
+
+# For example, as of 20211119 if you do the following with
+#store = pd.HDFStore('Sat_A_ct2hz_v0302_5sres.h5','r'),
+#you get '9047089' back:
+#np.sum((store['/Quality_flags'].values & int(quality_flag,2)) > 0)
+# Not sure if we need these
+# prefix_GTd_GTG_fn    = masterhdfdir+'matrices/GTG_GTd_array_iteration_'
+# prefix_model_fn      = masterhdfdir+'matrices/model_v1_iteration_'
+# prefix_model_value   = masterhdfdir+'matrices/model_v1_values_iteration_'
+# prefix_huber_weights = masterhdfdir+'matrices/model_v1_huber_iteration_'
+
 f = h5py.File(datafile, 'r')['/data']
 names = [item[0] for item in f.items()]
 datamap = dict(zip(names, range(len(names))))
@@ -21,16 +38,19 @@ sats = ['Sat_A','Sat_B']
 satmap = {'Sat_A':1, 'Sat_B':2}
 # stores = {}
 # dfs = {}
+
 columns = ['mlat', 'mlt','lperptoB_dot_e1','lperptoB_dot_e2']
 choosef107 = 'f107obs'
 ext_columns = ['vx', 'Bz', 'By', choosef107, 'tilt']
+# Derived columns: ["lperptoB_dot_ViyperptoB","Be3_in_Tesla","D"]
+
 subsets = {}
 external = {}
 subinds = {}
 
 # indies = slice(0,None)
 # indies = slice(0,2000000)
-indies = slice(3000000,6000000)
+# indies = slice(3000000,6000000)
 
 # Sub index for making model
 do_getsubinds = True
@@ -38,6 +58,8 @@ do_getsubinds = True
 outindfile = 'negby_array_indices.txt'
 outindfile = 'posby_array_indices.txt'
 outindfile = 'sortiment_array_indices.txt'
+outindfile = 'alldptilt_array_indices.txt'
+
 # if do_getsubinds:
 #     if outindfile == 'negbz_array_indices.txt':
 #         indfunc = lambda full: np.where((full['mlat'] > 0 ) & \
@@ -120,6 +142,16 @@ for sat in sats:
             store['/lperptoB_U']*store['/ViyperptoB_U']
 
 
+        if enforce_quality_flag:
+        
+            print(f"Dropping records that do not have Quality_flag == {quality_flag} ...")
+        
+            nNow = len(tmpdf)
+            tmpdf = tmpdf[(store['/Quality_flags'].values & int(quality_flag,2)) > 0]
+            nLater = len(tmpdf)
+                
+            print(f"Dropped {nNow-nLater} of {nNow} records ({(nNow-nLater)/nNow*100}%)")
+
     subsets[sat] = tmpdf
     external[sat] = tmpextdf
     
@@ -181,6 +213,12 @@ if do_getsubinds:
         indlets = np.where((full['mlat'].abs() >= 45 ) & \
                            # (full['By'] >= 0) & \
                            (np.abs(full['tilt']) <= 10) & \
+                           ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
+
+    elif outindfile == 'alldptilt_array_indices.txt':
+        indlets = np.where((full['mlat'].abs() >= 45 ) & \
+                           # (full['By'] >= 0) & \
+                           # (np.abs(full['tilt']) <= 10) & \
                            ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
 
     else:
