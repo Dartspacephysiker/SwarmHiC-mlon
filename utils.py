@@ -482,7 +482,26 @@ def nterms(NT = 0, MT = 0, NVi = 0, MVi = 0, NVe = 0, MVe = 0):
            len(SHkeys(NVi, MVi).setNmin(1).MleN().Mge(1))
 
 
-def get_legendre_arrays(nmax, mmax, theta, keys, schmidtnormalize = True, negative_m = False, minlat = 0):
+def nterms_analyticzeros(NT = 0, MT = 0, NVi = 0, MVi = 0, NVe = 0, MVe = 0):
+    """ return number of coefficients in an expansion in real spherical harmonics of
+        toroidal magnetic potential truncated at NT, MT
+        poloidal magnetic potential truncated at NVi, MVi for internal sources
+        poloidal magnetic potential truncated at NVe, MVe for external sources
+    """
+
+    return len(SHkeys(NT , MT ).setNmin(2).MleN().Mge(0)) + \
+           len(SHkeys(NT , MT ).setNmin(2).MleN().Mge(1)) + \
+           len(SHkeys(NVe, MVe).setNmin(2).MleN().Mge(0)) + \
+           len(SHkeys(NVe, MVe).setNmin(2).MleN().Mge(1)) + \
+           len(SHkeys(NVi, MVi).setNmin(2).MleN().Mge(0)) + \
+           len(SHkeys(NVi, MVi).setNmin(2).MleN().Mge(1))
+
+
+def get_legendre_arrays(nmax, mmax, theta, keys,
+                        schmidtnormalize = True,
+                        negative_m = False,
+                        minlat = 0,
+                        return_full_P_and_dP=False):
     """ Schmidt normalization is optional - can be skipped if applied to coefficients 
 
         theta is colat [degrees]
@@ -558,12 +577,263 @@ def get_legendre_arrays(nmax, mmax, theta, keys, schmidtnormalize = True, negati
                 P[n, -m]  = -1.**(-m) * factorial(n-m)/factorial(n+m) *  P[n, m]
                 dP[n, -m] = -1.**(-m) * factorial(n-m)/factorial(n+m) * dP[n, m]
 
+    if return_full_P_and_dP:
+        return P, dP
+
     Pmat  = np.hstack(tuple(P[key] for key in keys))
     dPmat = np.hstack(tuple(dP[key] for key in keys)) 
 
     return np.hstack((Pmat, dPmat))
 
 
+def get_P_Q_and_R_arrays(nmax, mmax, theta, keys,
+                       zero_thetas = 90.-np.array([47.,-47.]),
+                       # zero_keys = None,
+                       schmidtnormalize = True,
+                       negative_m = False,
+                       minlat = 0,
+                       return_full_P_and_dP=False):
+    """ Schmidt normalization is optional - can be skipped if applied to coefficients 
+
+        theta is colat [degrees]
+
+        algorithm from "Spacecraft Attitude Determination and Control" by James Richard Wertz
+        (http://books.google.no/books?id=GtzzpUN8VEoC&lpg=PP1&pg=PA781#v=onepage)
+
+        must be tested for large n - this could be unstable
+        sum over m should be 1 for all thetas
+
+        Same as get_legendre, but returns a N by 2M array, where N is the size of theta,
+        and M is the number of keys. The first half the columns correspond to P[n,m], with
+        n and m determined from keys - an shkeys.SHkeys object - and the second half is dP[n,m]
+
+        theta must be a column vector (N, 1)
+    """
+
+    assert len(zero_thetas) == 2
+    # assert np.all([key in zero_keys for key in keys]),"'zero_keys' must include all keys in 'keys'!"
+
+    # zero_keys = {} # dictionary of spherical harmonic keys
+    # zero_keys['cos_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(0)
+    # zero_keys['sin_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(1)
+    zero_keys = SHkeys(nmax, mmax).setNmin(1).MleN().Mge(0)
+
+
+    zero_thetas = zero_thetas.reshape((2,1))
+    zero_T = get_legendre_arrays(nmax, mmax, zero_thetas, zero_keys, return_full_P_and_dP=True)
+    zero_T_P = {key:zero_T[0][key] for key in zero_keys}
+    zero_T_dP = {key:zero_T[1][key] for key in zero_keys}
+
+    P = {}
+    dP = {}
+    gc.collect()
+    sinth = np.sin(d2r*theta)
+    costh = np.cos(d2r*theta)
+
+    if schmidtnormalize:
+        S = {}
+        S[0, 0] = 1.
+
+    # initialize the functions:
+    for n in range(nmax +1):
+        for m in range(nmax + 1):
+            P[n, m] = np.zeros_like(theta, dtype = np.float64)
+            dP[n, m] = np.zeros_like(theta, dtype = np.float64)
+
+    P[0, 0] = np.ones_like(theta, dtype = np.float64)
+    P[0, 0][np.abs(90 - theta) < minlat] = 0
+    for n in range(1, nmax +1):
+        for m in range(0, min([n + 1, mmax + 1])):
+            # do the legendre polynomials and derivatives
+            if n == m:
+                P[n, n]  = sinth * P[n - 1, m - 1]
+                dP[n, n] = sinth * dP[n - 1, m - 1] + costh * P[n - 1, n - 1]
+            else:
+
+                if n == 1:
+                    Knm = 0.
+                    P[n, m]  = costh * P[n -1, m]
+                    dP[n, m] = costh * dP[n - 1, m] - sinth * P[n - 1, m]
+
+                elif n > 1:
+                    Knm = ((n - 1)**2 - m**2) / ((2*n - 1)*(2*n - 3))
+                    P[n, m]  = costh * P[n -1, m] - Knm*P[n - 2, m]
+                    dP[n, m] = costh * dP[n - 1, m] - sinth * P[n - 1, m] - Knm * dP[n - 2, m]
+
+            if schmidtnormalize:
+                # compute Schmidt normalization
+                if m == 0:
+                    S[n, 0] = S[n - 1, 0] * (2.*n - 1)/n
+                else:
+                    S[n, m] = S[n, m - 1] * np.sqrt((n - m + 1)*(int(m == 1) + 1.)/(n + m))
+
+
+    if schmidtnormalize:
+        # now apply Schmidt normalization
+        for n in range(1, nmax + 1):
+            for m in range(0, min([n + 1, mmax + 1])):
+                P[n, m]  *= S[n, m]
+                dP[n, m] *= S[n, m]
+
+    if negative_m:
+        for n  in range(1, nmax + 1):
+            for m in range(0, min([n + 1, mmax + 1])):
+                P[n, -m]  = -1.**(-m) * factorial(n-m)/factorial(n+m) *  P[n, m]
+                dP[n, -m] = -1.**(-m) * factorial(n-m)/factorial(n+m) * dP[n, m]
+
+    iplus = 0
+    iminus = 1
+    Pratio_mu_plus = {key:zero_T_P[key][iplus][0]/zero_T_P[1,0][iplus][0] for key in zero_keys}
+    Q = {key:P[key]-Pratio_mu_plus[key]*P[1,0] for key in zero_keys}
+    dQ = {key:dP[key]-Pratio_mu_plus[key]*dP[1,0] for key in zero_keys}
+
+    Q11_mu_minus = zero_T_P[1,1][iminus][0]-Pratio_mu_plus[1,1]*zero_T_P[1,0][iminus][0]
+
+    R = {key:Q[key]*(1-Q[1,1]/Q11_mu_minus) for key in zero_keys}
+    dR = {key:dQ[key]*(1-Q[1,1]/Q11_mu_minus)-Q[key]*dQ[1,1]/Q11_mu_minus for key in zero_keys}
+
+    if return_full_P_and_dP:
+        # return dict(P=P,dP=dP,
+        #             Q=Q,dQ=dQ,
+        #             R=R,dR=dR)
+        return dict(P={key:P[key] for key in keys},
+                    dP={key:dP[key] for key in keys},
+                    Q=Q,dQ=dQ,
+                    R=R,dR=dR)
+
+    Pmat  = np.hstack(tuple(P[key] for key in keys))
+    dPmat = np.hstack(tuple(dP[key] for key in keys)) 
+    Qmat  = np.hstack(tuple(Q[key] for key in keys))
+    dQmat = np.hstack(tuple(dQ[key] for key in keys)) 
+    Rmat  = np.hstack(tuple(R[key] for key in keys))
+    dRmat = np.hstack(tuple(dR[key] for key in keys)) 
+
+    return np.hstack((Pmat, dPmat)),np.hstack((Qmat, dQmat)),np.hstack((Rmat, dRmat))
+
+
+def get_R_arrays(nmax, mmax, theta, keys,
+                 zero_thetas = 90.-np.array([47.,-47.]),
+                 # zero_keys = None,
+                 schmidtnormalize = True,
+                 negative_m = False,
+                 minlat = 0,
+                 return_full_P_and_dP=False):
+    """ Schmidt normalization is optional - can be skipped if applied to coefficients 
+
+        theta is colat [degrees]
+
+        algorithm from "Spacecraft Attitude Determination and Control" by James Richard Wertz
+        (http://books.google.no/books?id=GtzzpUN8VEoC&lpg=PP1&pg=PA781#v=onepage)
+
+        must be tested for large n - this could be unstable
+        sum over m should be 1 for all thetas
+
+        Same as get_legendre, but returns a N by 2M array, where N is the size of theta,
+        and M is the number of keys. The first half the columns correspond to P[n,m], with
+        n and m determined from keys - an shkeys.SHkeys object - and the second half is dP[n,m]
+
+        theta must be a column vector (N, 1)
+    """
+
+    assert len(zero_thetas) == 2
+    # assert np.all([key in zero_keys for key in keys]),"'zero_keys' must include all keys in 'keys'!"
+
+    # zero_keys = {} # dictionary of spherical harmonic keys
+    # zero_keys['cos_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(0)
+    # zero_keys['sin_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(1)
+    zero_keys = SHkeys(nmax, mmax).setNmin(1).MleN().Mge(0)
+
+
+    zero_thetas = zero_thetas.reshape((2,1))
+    zero_T = get_legendre_arrays(nmax, mmax, zero_thetas, zero_keys, return_full_P_and_dP=True)
+    zero_T_P = {key:zero_T[0][key] for key in zero_keys}
+    zero_T_dP = {key:zero_T[1][key] for key in zero_keys}
+
+    P = {}
+    dP = {}
+    gc.collect()
+    sinth = np.sin(d2r*theta)
+    costh = np.cos(d2r*theta)
+
+    if schmidtnormalize:
+        S = {}
+        S[0, 0] = 1.
+
+    # initialize the functions:
+    for n in range(nmax +1):
+        for m in range(nmax + 1):
+            P[n, m] = np.zeros_like(theta, dtype = np.float64)
+            dP[n, m] = np.zeros_like(theta, dtype = np.float64)
+
+    P[0, 0] = np.ones_like(theta, dtype = np.float64)
+    P[0, 0][np.abs(90 - theta) < minlat] = 0
+    for n in range(1, nmax +1):
+        for m in range(0, min([n + 1, mmax + 1])):
+            # do the legendre polynomials and derivatives
+            if n == m:
+                P[n, n]  = sinth * P[n - 1, m - 1]
+                dP[n, n] = sinth * dP[n - 1, m - 1] + costh * P[n - 1, n - 1]
+            else:
+
+                if n == 1:
+                    Knm = 0.
+                    P[n, m]  = costh * P[n -1, m]
+                    dP[n, m] = costh * dP[n - 1, m] - sinth * P[n - 1, m]
+
+                elif n > 1:
+                    Knm = ((n - 1)**2 - m**2) / ((2*n - 1)*(2*n - 3))
+                    P[n, m]  = costh * P[n -1, m] - Knm*P[n - 2, m]
+                    dP[n, m] = costh * dP[n - 1, m] - sinth * P[n - 1, m] - Knm * dP[n - 2, m]
+
+            if schmidtnormalize:
+                # compute Schmidt normalization
+                if m == 0:
+                    S[n, 0] = S[n - 1, 0] * (2.*n - 1)/n
+                else:
+                    S[n, m] = S[n, m - 1] * np.sqrt((n - m + 1)*(int(m == 1) + 1.)/(n + m))
+
+
+    if schmidtnormalize:
+        # now apply Schmidt normalization
+        for n in range(1, nmax + 1):
+            for m in range(0, min([n + 1, mmax + 1])):
+                P[n, m]  *= S[n, m]
+                dP[n, m] *= S[n, m]
+
+    if negative_m:
+        for n  in range(1, nmax + 1):
+            for m in range(0, min([n + 1, mmax + 1])):
+                P[n, -m]  = -1.**(-m) * factorial(n-m)/factorial(n+m) *  P[n, m]
+                dP[n, -m] = -1.**(-m) * factorial(n-m)/factorial(n+m) * dP[n, m]
+
+    iplus = 0
+    iminus = 1
+    Pratio_mu_plus = {key:zero_T_P[key][iplus][0]/zero_T_P[1,0][iplus][0] for key in zero_keys}
+    Q = {key:P[key]-Pratio_mu_plus[key]*P[1,0] for key in zero_keys}
+    dQ = {key:dP[key]-Pratio_mu_plus[key]*dP[1,0] for key in zero_keys}
+
+    Q11_mu_minus = zero_T_P[1,1][iminus][0]-Pratio_mu_plus[1,1]*zero_T_P[1,0][iminus][0]
+
+    R = {key:Q[key]*(1-Q[1,1]/Q11_mu_minus) for key in zero_keys}
+    dR = {key:dQ[key]*(1-Q[1,1]/Q11_mu_minus)-Q[key]*dQ[1,1]/Q11_mu_minus for key in zero_keys}
+
+    if return_full_P_and_dP:
+        # return dict(P=P,dP=dP,
+        #             Q=Q,dQ=dQ,
+        #             R=R,dR=dR)
+        return dict(P={key:P[key] for key in keys},
+                    dP={key:dP[key] for key in keys},
+                    Q=Q,dQ=dQ,
+                    R=R,dR=dR)
+
+    Pmat  = np.hstack(tuple(P[key] for key in keys))
+    dPmat = np.hstack(tuple(dP[key] for key in keys)) 
+    Qmat  = np.hstack(tuple(Q[key] for key in keys))
+    dQmat = np.hstack(tuple(dQ[key] for key in keys)) 
+    Rmat  = np.hstack(tuple(R[key] for key in keys))
+    dRmat = np.hstack(tuple(dR[key] for key in keys)) 
+
+    return np.hstack((Rmat, dRmat))
 
 # def getG_poltorapex_dask(NT, MT, NV, MV, qlat, alat, phi, h, f1e, f1n, f2e, f2n, d1e, d1n, d2e, d2n, RR = REFRE, makenoise = False, toroidal_minlat = 0):
 #     """ all input arrays should be dask arrays with shape (N, 1), and with the same chunksize. """
@@ -774,6 +1044,70 @@ def getG_torapex_dask(NT, MT, alat, phi,
     return G
 
 
+def getG_torapex_dask_analyticzeros(NT, MT, alat, phi, 
+                                    Be3_in_Tesla,
+                                    lperptoB_dot_e1, lperptoB_dot_e2,
+                                    RR=REFRE,
+                                    makenoise=False,
+                                    toroidal_minlat=0,
+                                    apex_ref_height=110,
+                                    zerolat=47):
+    """ all input arrays should be dask arrays with shape (N, 1), and with the same chunksize. """
+    gc.collect()
+
+    # generate spherical harmonic keys    
+    keys = {} # dictionary of spherical harmonic keys
+    keys['cos_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(0)
+    keys['sin_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(1)
+
+    m_cos_T = da.from_array(keys['cos_T'].m, chunks = keys['cos_T'].m.shape)
+    m_sin_T = da.from_array(keys['sin_T'].m, chunks = keys['sin_T'].m.shape)
+
+    if makenoise: print( m_cos_T.shape, m_sin_T.shape)
+
+    # generate Legendre matrices - first get dicts of arrays, and then stack them in the appropriate fashion
+    if makenoise: print( 'Calculating Legendre functions. alat shape and chunks:', alat.shape, alat.chunks)
+    legendre_T = alat.map_blocks(lambda x: get_R_arrays(NT, MT, 90 - x, keys['cos_T'], minlat = toroidal_minlat), dtype = alat.dtype, chunks = (alat.chunks[0], tuple([2*len(keys['cos_T'])])))
+
+    R_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
+    import warnings
+    warnings.warn("NOT SURE THAT YOU SHOULD FLIP SIGN OF dR_cos_T and dR_sin_T. You only do it because that was what was done with dP_cos_T and dP_sin_T.")
+    dR_cos_T = -legendre_T[:,  len(keys['cos_T']):]
+
+    if makenoise: print( 'R, dR cos_T size and chunks', R_cos_T.shape, dR_cos_T.shape)#, R_cos_T.chunks, dR_cos_T.chunks
+    R_sin_T  =  R_cos_T[ :, keys['cos_T'].m.flatten() != 0] 
+    dR_sin_T =  dR_cos_T[:, keys['cos_T'].m.flatten() != 0]
+
+    if makenoise: print( 'R, dR sin_T size and chunks', R_sin_T.shape, dR_sin_T.shape, R_sin_T.chunks[0], dR_sin_T.chunks[1])
+
+    # trig matrices:
+    cos_T  =  da.cos(phi * d2r * m_cos_T)#.rechunk((phi.chunks[0], m_cos_T.shape[1]))
+    sin_T  =  da.sin(phi * d2r * m_sin_T)#.rechunk((phi.chunks[0], m_sin_T.shape[1]))
+
+    dcos_T = -da.sin(phi * d2r * m_cos_T)#.rechunk((phi.chunks[0], m_cos_T.shape[1]))
+    dsin_T =  da.cos(phi * d2r * m_sin_T)#.rechunk((phi.chunks[0], m_sin_T.shape[1]))
+
+    if makenoise: print( cos_T.shape, sin_T.shape)
+
+    cos_alat   = da.cos(alat * d2r)
+
+    sinI  = 2 * da.sin( alat * d2r )/da.sqrt(4 - 3*cos_alat**2)
+
+    R = (RR + apex_ref_height)                   # DON'T convert from km to m; this way potential is in kV
+
+    # matrices with partial derivatives in MA coordinates:
+    dT_dalon  = da.hstack(( R_cos_T * dcos_T * m_cos_T,  R_sin_T * dsin_T * m_sin_T))
+    dT_dalat  = da.hstack((dR_cos_T *  cos_T          , dR_sin_T *  sin_T          ))
+
+    # Divide by a thousand so that model coeffs are in mV/m
+    lperptoB_dot_vperptoB = RR/(R * Be3_in_Tesla * 1000) * (lperptoB_dot_e2 / cos_alat * dT_dalon + \
+                                                            lperptoB_dot_e1 / sinI     * dT_dalat)
+
+    G = lperptoB_dot_vperptoB
+
+    return G
+
+
 def make_model_coeff_txt_file(coeff_fn,
                               NT=65,MT=3,
                               NV=0,MV=0,
@@ -888,6 +1222,7 @@ def make_model_coeff_txt_file(coeff_fn,
 # 
 # column names:"""
     dadzilla = dadzilla.replace("DTSTR",dtstring)
+    dadzilla = dadzilla.replace("65, 3 (for T)",f"{NT}, {MT} (for T)")
     
     openstring = "{:s} {:s} "+"{:s} "*(NWEIGHTS*2)
     openstring = openstring.format('#n','m',
