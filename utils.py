@@ -508,6 +508,9 @@ def get_legendre_arrays(nmax, mmax, theta, keys,
 
         algorithm from "Spacecraft Attitude Determination and Control" by James Richard Wertz
         (http://books.google.no/books?id=GtzzpUN8VEoC&lpg=PP1&pg=PA781#v=onepage)
+        ***NOTE: The algorithm calculates P^m_n (μ) = P^m_n(cosθ) and dP^m_n/dθ, but we wish
+                 to instead calculate dP^m_n/dλ = -dP^m_n/dθ. Hence the application of a 
+                 negative sign to dP^m_n here.
 
         must be tested for large n - this could be unstable
         sum over m should be 1 for all thetas
@@ -599,6 +602,9 @@ def get_P_Q_and_R_arrays(nmax, mmax, theta, keys,
 
         algorithm from "Spacecraft Attitude Determination and Control" by James Richard Wertz
         (http://books.google.no/books?id=GtzzpUN8VEoC&lpg=PP1&pg=PA781#v=onepage)
+        ***NOTE: The algorithm calculates P^m_n (μ) = P^m_n(cosθ) and dP^m_n/dθ, but we wish
+                 to instead calculate dP^m_n/dλ = -dP^m_n/dθ. Hence the application of a 
+                 negative sign to dP^m_n here.
 
         must be tested for large n - this could be unstable
         sum over m should be 1 for all thetas
@@ -724,6 +730,7 @@ def get_R_arrays(nmax, mmax, theta, keys,
 
         algorithm from "Spacecraft Attitude Determination and Control" by James Richard Wertz
         (http://books.google.no/books?id=GtzzpUN8VEoC&lpg=PP1&pg=PA781#v=onepage)
+        ***NOTE: The algorithm calculates P^m_n (μ) = P^m_n(cosθ) and dP^m_n/dθ, NOT dP^m_n/dλ
 
         must be tested for large n - this could be unstable
         sum over m should be 1 for all thetas
@@ -963,10 +970,16 @@ def getG_torapex_dask(NT, MT, alat, phi,
     if makenoise: print( 'Calculating Legendre functions. alat shape and chunks:', alat.shape, alat.chunks)
     legendre_T = alat.map_blocks(lambda x: get_legendre_arrays(NT, MT, 90 - x, keys['cos_T'], minlat = toroidal_minlat), dtype = alat.dtype, chunks = (alat.chunks[0], tuple([2*len(keys['cos_T'])])))
     # legendre_V = qlat.map_blocks(lambda x: get_legendre_arrays(NV, MV, 90 - x, keys['cos_V']), dtype = qlat.dtype, chunks = (qlat.chunks[0], tuple([2*len(keys['cos_V'])])))
+
     P_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
+    #NOTE: algorithm used by get_legendre_arrays calculates dP^m_n/dθ, but we wish
+    #      to instead calculate dP^m_n/dλ = -dP^m_n/dθ. Hence the application of a 
+    #      negative sign to dP^m_n here.
     dP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
+
     # P_cos_V  =  legendre_V[:, :len(keys['cos_V']) ] # split
     # dP_cos_V = -legendre_V[:,  len(keys['cos_V']):]
+
     # if makenoise: print( 'P, dP cos_T and P, dP cos_V size and chunks', P_cos_T.shape, dP_cos_T.shape, P_cos_V.shape, dP_cos_V.shape)#, P_cos_T.chunks, dP_cos_T.chunks, P_cos_V.chunks, dP_cos_V.chunks
     if makenoise: print( 'P, dP cos_T size and chunks', P_cos_T.shape, dP_cos_T.shape)#, P_cos_T.chunks, dP_cos_T.chunks
     P_sin_T  =  P_cos_T[ :, keys['cos_T'].m.flatten() != 0] 
@@ -1067,12 +1080,15 @@ def getG_torapex_dask_analyticzeros(NT, MT, alat, phi,
 
     # generate Legendre matrices - first get dicts of arrays, and then stack them in the appropriate fashion
     if makenoise: print( 'Calculating Legendre functions. alat shape and chunks:', alat.shape, alat.chunks)
-    legendre_T = alat.map_blocks(lambda x: get_R_arrays(NT, MT, 90 - x, keys['cos_T'], minlat = toroidal_minlat), dtype = alat.dtype, chunks = (alat.chunks[0], tuple([2*len(keys['cos_T'])])))
+    R_T = alat.map_blocks(lambda x: get_R_arrays(NT, MT, 90 - x, keys['cos_T'], minlat = toroidal_minlat), dtype = alat.dtype, chunks = (alat.chunks[0], tuple([2*len(keys['cos_T'])])))
 
-    R_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
-    import warnings
-    warnings.warn("NOT SURE THAT YOU SHOULD FLIP SIGN OF dR_cos_T and dR_sin_T. You only do it because that was what was done with dP_cos_T and dP_sin_T.")
-    dR_cos_T = -legendre_T[:,  len(keys['cos_T']):]
+    R_cos_T  =  R_T[:, :len(keys['cos_T']) ] # split
+    #NOTE: algorithm used by get_legendre_arrays within get_R_arrays calculates dP^m_n/dθ, but we wish
+    #      to instead calculate dP^m_n/dλ = -dP^m_n/dθ and dR^m_n/dλ = -dR^m_n/dθ. Hence the application of a 
+    #      negative sign to dR^m_n here.
+
+    # Multiply by -1 because we want dR/dλ = -dR/dθ, and get_R_arrays calculates dR/dθ.
+    dR_cos_T = -R_T[:,  len(keys['cos_T']):]
 
     if makenoise: print( 'R, dR cos_T size and chunks', R_cos_T.shape, dR_cos_T.shape)#, R_cos_T.chunks, dR_cos_T.chunks
     R_sin_T  =  R_cos_T[ :, keys['cos_T'].m.flatten() != 0] 

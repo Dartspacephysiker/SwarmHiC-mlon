@@ -26,8 +26,8 @@ from gtg_array_utils import weighted_GTd_GTG_array, expand_GTG_and_GTd
 from functools import reduce
 # from hdl_model_iteration_helpers import itersolve, iterhuber
 
-MACHINE = 'Kalles'
-MACHINE = 'SpencersLaptop'
+MACHINE = 'KallesTower'
+# MACHINE = 'SpencersLaptop'
 
 assert MACHINE in ['KallesTower','SpencersLaptop']
 
@@ -44,6 +44,8 @@ DATAVERSION = 'v2'                                       # 2021/11/19
 datafile       = masterhdfdir+f'modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
 
 ## Select which type of model
+MODELSUFF = '_analyticzero_at_47deg'
+
 dosmall = True
 doonlynegbzsouth = False
 doonlynegby = False
@@ -55,8 +57,6 @@ doFINAL = False                 # Use ALL data, all model parameters
 
 # do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
 do_modded_model = doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
-
-MODELSUFF = '_analyticzero_at_47deg'
 
 # MODELVERSION = DATAVERSION+'onlyca'
 MODELVERSION = DATAVERSION+'onlyca_mV_per_m_lillambda'+MODELSUFF
