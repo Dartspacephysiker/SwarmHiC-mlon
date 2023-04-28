@@ -21,7 +21,7 @@ import sys
 from scipy.linalg import cholesky, cho_solve
 from dask.diagnostics import ProgressBar
 # from utils import nterms, SHkeys, getG_torapex_dask, make_model_coeff_txt_file
-from utils import nterms_analyticzeros, SHkeys, getG_torapex_dask_analyticzeros, make_model_coeff_txt_file
+from utils import nterms_analyticzeros, SHkeys, getG_torapex_dask_analyticzeros, make_model_coeff_txt_file_analyticzeros
 from gtg_array_utils import weighted_GTd_GTG_array, expand_GTG_and_GTd
 from functools import reduce
 # from hdl_model_iteration_helpers import itersolve, iterhuber
@@ -46,13 +46,13 @@ datafile       = masterhdfdir+f'modeldata_{DATAVERSION}_update.hdf5' # where the
 ## Select which type of model
 MODELSUFF = '_analyticzero_at_47deg'
 
-dosmall = True
+dosmall = False
 doonlynegbzsouth = False
 doonlynegby = False
 doonlyposby = False
 doassortment = False
 doalldptilt = False
-doFINAL = False                 # Use ALL data, all model parameters
+doFINAL = True                 # Use ALL data, all model parameters
 
 
 # do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
@@ -509,9 +509,9 @@ while True: # enter loop
     
 
 coeff_fn = prefix_model_fn + str(i) + '.npy'
-make_model_coeff_txt_file(coeff_fn,
-                          NT=NT,MT=MT,
-                          NV=NV,MV=MV,
-                          TRANSPOSEEM=False,
-                          PRINTOUTPUT=False)
+make_model_coeff_txt_file_analyticzeros(coeff_fn,
+                                        NT=NT,MT=MT,
+                                        NV=NV,MV=MV,
+                                        TRANSPOSEEM=False,
+                                        PRINTOUTPUT=False)
 print( 'done. DONE!!!')
