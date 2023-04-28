@@ -467,19 +467,20 @@ class SHkeys(object):
 
 
 
-def nterms(NT = 0, MT = 0, NVi = 0, MVi = 0, NVe = 0, MVe = 0):
+def nterms(NT = 0, MT = 0, NVi = 0, MVi = 0, NVe = 0, MVe = 0,
+           Nmin = 1):
     """ return number of coefficients in an expansion in real spherical harmonics of
         toroidal magnetic potential truncated at NT, MT
         poloidal magnetic potential truncated at NVi, MVi for internal sources
         poloidal magnetic potential truncated at NVe, MVe for external sources
     """
 
-    return len(SHkeys(NT , MT ).setNmin(1).MleN().Mge(0)) + \
-           len(SHkeys(NT , MT ).setNmin(1).MleN().Mge(1)) + \
-           len(SHkeys(NVe, MVe).setNmin(1).MleN().Mge(0)) + \
-           len(SHkeys(NVe, MVe).setNmin(1).MleN().Mge(1)) + \
-           len(SHkeys(NVi, MVi).setNmin(1).MleN().Mge(0)) + \
-           len(SHkeys(NVi, MVi).setNmin(1).MleN().Mge(1))
+    return len(SHkeys(NT , MT ).setNmin(Nmin).MleN().Mge(0)) + \
+           len(SHkeys(NT , MT ).setNmin(Nmin).MleN().Mge(1)) + \
+           len(SHkeys(NVe, MVe).setNmin(Nmin).MleN().Mge(0)) + \
+           len(SHkeys(NVe, MVe).setNmin(Nmin).MleN().Mge(1)) + \
+           len(SHkeys(NVi, MVi).setNmin(Nmin).MleN().Mge(0)) + \
+           len(SHkeys(NVi, MVi).setNmin(Nmin).MleN().Mge(1))
 
 
 def nterms_analyticzeros(NT = 0, MT = 0, NVi = 0, MVi = 0, NVe = 0, MVe = 0):
@@ -489,13 +490,7 @@ def nterms_analyticzeros(NT = 0, MT = 0, NVi = 0, MVi = 0, NVe = 0, MVe = 0):
         poloidal magnetic potential truncated at NVe, MVe for external sources
     """
 
-    return len(SHkeys(NT , MT ).setNmin(2).MleN().Mge(0)) + \
-           len(SHkeys(NT , MT ).setNmin(2).MleN().Mge(1)) + \
-           len(SHkeys(NVe, MVe).setNmin(2).MleN().Mge(0)) + \
-           len(SHkeys(NVe, MVe).setNmin(2).MleN().Mge(1)) + \
-           len(SHkeys(NVi, MVi).setNmin(2).MleN().Mge(0)) + \
-           len(SHkeys(NVi, MVi).setNmin(2).MleN().Mge(1))
-
+    return nterms(NT=NT,MT=MT,NVi=NVi,MVi=MVi,NVe=NVe,MVe=MVe,Nmin=2)
 
 def get_legendre_arrays(nmax, mmax, theta, keys,
                         schmidtnormalize = True,
@@ -1380,4 +1375,245 @@ def make_model_coeff_txt_file(coeff_fn,
     # tor_c_tilt_tau_sinca      tor_s_tilt_tau_sinca    
     # tor_c_tilt_tau_cosca      tor_s_tilt_tau_cosca    
     # tor_c_f107                tor_s_f107              
+    
+
+def make_model_coeff_txt_file_analyticzeros(coeff_fn,
+                                            NT=65,MT=3,
+                                            NV=0,MV=0,
+                                            TRANSPOSEEM=False,
+                                            PRINTOUTPUT=False):
+
+    from datetime import datetime
+    import sys
+    import os
+    from utils import nterms, SHkeys
+
+    Nmin = 2
+
+    # NT, MT = 65, 3
+    # # NV, MV = 45, 3
+    # NV, MV = 0, 0
+    NEQ = nterms(NT, MT, NV, MV, Nmin=Nmin)
+    
+    sheicpath = '/home/spencerh/Research/SHEIC/'
+    if not sheicpath in sys.path:
+        sys.path.append(sheicpath)
+    
+    dtstring = datetime.now().strftime("%d %B %Y")
+    
+    TRANSPOSEEM = False
+    PRINTOUTPUT = False
+    
+    # coeffdir = '/SPENCEdata/Research/database/SHEIC/matrices/'
+    # coefffile = '10k_points/model_v1_values_iteration_3.npy'
+    # coefffile = '10k_points/model_v1_iteration_3.npy'
+    
+    coeffdir = os.path.dirname(coeff_fn)+'/'
+    coefffile = os.path.basename(coeff_fn)
+    
+    # coeffdir = '/SPENCEdata/Research/database/SHEIC/matrices/'
+    # coefffile = 'model_v1BzNegNH_iteration_4.npy'
+    # coefffile = 'model_v1noparmsBzNegNH_iteration_2.npy'
+    
+    if TRANSPOSEEM:
+        outfile = coefffile.replace('.npy','_TRANSPOSE.txt')
+        print("Making TRANSPOSE coefficient file")
+    else:
+        outfile = coefffile.replace('.npy','.txt')
+    
+    # Read .npy coeff file
+    print(f"Reading in {coefffile} for making a coeff .txt file ...")
+    
+    # CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, KALLE'S ORIG
+    if 'onlyca' in coefffile:
+        print("This is a 'onlyca' coefffile with 3 weights ...")
+        NWEIGHTS = 3
+        CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY ONE WEIGHT
+    elif 'noparms' in coefffile:
+        print("This is a 'noparms' coefffile with 1 weight ...")
+        NWEIGHTS = 1
+        CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, KALLE'S ORIG
+    else:
+        print("This is a coefffile with 19 weights ...")
+        NWEIGHTS = 19
+        CHUNKSIZE = 2 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights
+    
+    assert NWEIGHTS in (1,3,19),f"Have not yet implemented make_model_coeff_txt_file.py for {NWEIGHTS} weights!"
+    
+    N_NUM = NEQ*(NEQ+1)//2*NWEIGHTS*(NWEIGHTS+1)//2 + NEQ*NWEIGHTS # number of unique elements in GTG and GTd (derived quantity - do not change)
+    
+    coeffs = np.load(os.path.join(coeffdir,coefffile))  # Shape should be NEQ*NWEIGHTS
+    print("Coeffs array shape:", coeffs.shape[0])
+    print("NEQ*NWEIGHTS      =", NEQ*NWEIGHTS)
+    if coeffs.shape[0] == NEQ*NWEIGHTS:
+        print("Good! These should be the same")
+    else:
+        assert 2<0,"You're going to run into trouble! coeffs in coeff_fn are wrong size"
+
+    keys = {} # dictionary of spherical harmonic keys
+    keys['cos_T'] = SHkeys(NT, MT).setNmin(Nmin).MleN().Mge(0)
+    keys['sin_T'] = SHkeys(NT, MT).setNmin(Nmin).MleN().Mge(1)
+    
+    #len(SHkeys(NT , MT ).setNmin(1).MleN().Mge(0)) #Out[30]: 257
+    #len(SHkeys(NT , MT ).setNmin(1).MleN().Mge(1)) #Out[31]: 192
+    #keys['cos_T'].n.shape #Out[33]: (1, 257)
+    #keys['sin_T'].n.shape #Out[34]: (1, 192)
+    #257+192 #Out[35]: 449 # == NEQ!
+    
+    COSN = keys['cos_T'].n.ravel()
+    COSM = keys['cos_T'].m.ravel()
+    SINN = keys['sin_T'].n.ravel()
+    SINM = keys['sin_T'].m.ravel()
+    
+    ncosterms = len(COSN)
+    nsinterms = len(SINN)
+    
+    # Based on Research/pySHEIC/pysheic/testem.py, it turns out that the order needs to be (NWEIGHTS, NEQ), followed by a transpose operation
+    if TRANSPOSEEM:
+        COEFFS = coeffs.reshape((NEQ,NWEIGHTS)).copy()
+    else:
+        COEFFS = coeffs.reshape((NWEIGHTS,NEQ)).T.copy()
+        
+    COSCOEFFS = COEFFS[:ncosterms,]
+    SINCOEFFS = COEFFS[ncosterms:,]
+    # fmtstring = "{:2d} {:1d}"+" {:10f}"*38
+    fmtstring = "{:2d} {:1d}"+" {:10.4g}"*(NWEIGHTS*2)
+    
+    dadzilla = """# Spherical harmonic coefficients for the Swarm HEmispherically resolved Ionospheric Convection (SHEIC) model
+# Produced DTSTR
+#
+# Based on Swarm convection measurements made between 2013-12 to 2020.
+# Reference: Laundal et al., "Solar wind and seasonal influence on ionospheric currents", Journal of Geophysical Research - Space Physics, doi:10.1029/2018JA025387, 2018
+#
+# Coefficient unit: mV/m
+# Apex reference height: 110 km
+# Earth radius: 6371.2 km
+#
+# Spherical harmonic degree, order: 65, 3 (for T) (BUT starts at N=2!)
+# 
+# column names:"""
+    dadzilla = dadzilla.replace("DTSTR",dtstring)
+    dadzilla = dadzilla.replace("65, 3 (for T)",f"{NT}, {MT} (for T)")
+    dadzilla = dadzilla.replace("(BUT starts at N=2!)",f"(BUT starts at N={Nmin}!)")
+
+    openstring = "{:s} {:s} "+"{:s} "*(NWEIGHTS*2)
+    openstring = openstring.format('#n','m',
+                           'tor_c_const'             ,  'tor_s_const'             ,
+                           'tor_c_sinca'             ,  'tor_s_sinca'             ,
+                           'tor_c_cosca'             ,  'tor_s_cosca'             ,
+                           'tor_c_epsilon'           ,  'tor_s_epsilon'           ,
+                           'tor_c_epsilon_sinca'     ,  'tor_s_epsilon_sinca'     ,
+                           'tor_c_epsilon_cosca'     ,  'tor_s_epsilon_cosca'     ,
+                           'tor_c_tilt'              ,  'tor_s_tilt'              ,
+                           'tor_c_tilt_sinca'        ,  'tor_s_tilt_sinca'        ,
+                           'tor_c_tilt_cosca'        ,  'tor_s_tilt_cosca'        ,
+                           'tor_c_tilt_epsilon'      ,  'tor_s_tilt_epsilon'      ,
+                           'tor_c_tilt_epsilon_sinca',  'tor_s_tilt_epsilon_sinca',
+                           'tor_c_tilt_epsilon_cosca',  'tor_s_tilt_epsilon_cosca',
+                           'tor_c_tau'               ,  'tor_s_tau'               ,
+                           'tor_c_tau_sinca'         ,  'tor_s_tau_sinca'         ,
+                           'tor_c_tau_cosca'         ,  'tor_s_tau_cosca'         ,
+                           'tor_c_tilt_tau'          ,  'tor_s_tilt_tau'          ,
+                           'tor_c_tilt_tau_sinca'    ,  'tor_s_tilt_tau_sinca'    ,
+                           'tor_c_tilt_tau_cosca'    ,  'tor_s_tilt_tau_cosca'    ,
+                           'tor_c_f107'              ,  'tor_s_f107'              )
+    outf = open(coeffdir+outfile,'w')
+    print("Opening "+coeffdir+outfile+' ...')
+    if PRINTOUTPUT:
+        print(dadzilla)
+        print(openstring)
+    outf.write(dadzilla+'\n')
+    outf.write(openstring+'\n')
+    
+    coscount = 0
+    sincount = 0
+    for coscount in range(ncosterms):
+        cosn = COSN[coscount]
+        cosm = COSM[coscount]
+    
+    
+        if NWEIGHTS == 19:
+            
+            # Get cos terms
+            tor_c_const,tor_c_sinca,tor_c_cosca,tor_c_epsilon,tor_c_epsilon_sinca,tor_c_epsilon_cosca,tor_c_tilt,tor_c_tilt_sinca,tor_c_tilt_cosca,tor_c_tilt_epsilon,tor_c_tilt_epsilon_sinca,tor_c_tilt_epsilon_cosca,tor_c_tau,tor_c_tau_sinca,tor_c_tau_cosca,tor_c_tilt_tau,tor_c_tilt_tau_sinca,tor_c_tilt_tau_cosca,tor_c_f107 = COSCOEFFS[coscount,:]
+            
+            # Get sin terms
+            if cosm > 0:
+            
+                tor_s_const,tor_s_sinca,tor_s_cosca,tor_s_epsilon,tor_s_epsilon_sinca,tor_s_epsilon_cosca,tor_s_tilt,tor_s_tilt_sinca,tor_s_tilt_cosca,tor_s_tilt_epsilon,tor_s_tilt_epsilon_sinca,tor_s_tilt_epsilon_cosca,tor_s_tau,tor_s_tau_sinca,tor_s_tau_cosca,tor_s_tilt_tau,tor_s_tilt_tau_sinca,tor_s_tilt_tau_cosca,tor_s_f107 = SINCOEFFS[sincount,:]
+            
+                sincount += 1
+            
+            else:
+                tor_s_const,tor_s_sinca,tor_s_cosca,tor_s_epsilon,tor_s_epsilon_sinca,tor_s_epsilon_cosca,tor_s_tilt,tor_s_tilt_sinca,tor_s_tilt_cosca,tor_s_tilt_epsilon,tor_s_tilt_epsilon_sinca,tor_s_tilt_epsilon_cosca,tor_s_tau,tor_s_tau_sinca,tor_s_tau_cosca,tor_s_tilt_tau,tor_s_tilt_tau_sinca,tor_s_tilt_tau_cosca,tor_s_f107 = np.ones(NWEIGHTS)*np.nan
+            
+            # Make output line
+            thisline = fmtstring.format(cosn,cosm,
+                                        tor_c_const             ,  tor_s_const             ,
+                                        tor_c_sinca             ,  tor_s_sinca             ,
+                                        tor_c_cosca             ,  tor_s_cosca             ,
+                                        tor_c_epsilon           ,  tor_s_epsilon           ,
+                                        tor_c_epsilon_sinca     ,  tor_s_epsilon_sinca     ,
+                                        tor_c_epsilon_cosca     ,  tor_s_epsilon_cosca     ,
+                                        tor_c_tilt              ,  tor_s_tilt              ,
+                                        tor_c_tilt_sinca        ,  tor_s_tilt_sinca        ,
+                                        tor_c_tilt_cosca        ,  tor_s_tilt_cosca        ,
+                                        tor_c_tilt_epsilon      ,  tor_s_tilt_epsilon      ,
+                                        tor_c_tilt_epsilon_sinca,  tor_s_tilt_epsilon_sinca,
+                                        tor_c_tilt_epsilon_cosca,  tor_s_tilt_epsilon_cosca,
+                                        tor_c_tau               ,  tor_s_tau               ,
+                                        tor_c_tau_sinca         ,  tor_s_tau_sinca         ,
+                                        tor_c_tau_cosca         ,  tor_s_tau_cosca         ,
+                                        tor_c_tilt_tau          ,  tor_s_tilt_tau          ,
+                                        tor_c_tilt_tau_sinca    ,  tor_s_tilt_tau_sinca    ,
+                                        tor_c_tilt_tau_cosca    ,  tor_s_tilt_tau_cosca    ,
+                                        tor_c_f107              ,  tor_s_f107              )
+    
+        elif NWEIGHTS == 3:
+            
+            # Get cos terms
+            tor_c_const,tor_c_sinca,tor_c_cosca = COSCOEFFS[coscount,:]
+            
+            # Get sin terms
+            if cosm > 0:
+            
+                tor_s_const,tor_s_sinca,tor_s_cosca = SINCOEFFS[sincount,:]
+            
+                sincount += 1
+            
+            else:
+                tor_s_const,tor_s_sinca,tor_s_cosca = np.ones(NWEIGHTS)*np.nan
+            
+            # Make output line
+            thisline = fmtstring.format(cosn,cosm,
+                                        tor_c_const             ,  tor_s_const             ,
+                                        tor_c_sinca             ,  tor_s_sinca             ,
+                                        tor_c_cosca             ,  tor_s_cosca             )
+    
+        elif NWEIGHTS == 1:
+            
+            # Get cos terms
+            tor_c_const = COSCOEFFS[coscount,:][0]
+            
+            # Get sin terms
+            if cosm > 0:
+            
+                tor_s_const = SINCOEFFS[sincount,:][0]
+            
+                sincount += 1
+            
+            else:
+                tor_s_const = np.ones(NWEIGHTS)*np.nan
+                tor_s_const = tor_s_const[0]
+    
+            # Make output line
+            thisline = fmtstring.format(cosn,cosm,
+                                        tor_c_const             ,  tor_s_const             )
+    
+        if PRINTOUTPUT:
+            print(thisline)
+        outf.write(thisline+'\n')
+    
+    outf.close()
+    print("Made "+coeffdir+outfile)
     
