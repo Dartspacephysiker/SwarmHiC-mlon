@@ -1076,7 +1076,7 @@ def getG_torapex_dask_analyticzeros(NT, MT, alat, phi,
     # generate Legendre matrices - first get dicts of arrays, and then stack them in the appropriate fashion
     if makenoise: print( 'Calculating Legendre functions. alat shape and chunks:', alat.shape, alat.chunks)
     R_T = alat.map_blocks(lambda x: get_R_arrays(NT, MT, 90 - x, keys['cos_T'],
-                                                 minlat = toroidal_minlat
+                                                 minlat = toroidal_minlat,
                                                  zero_thetas = 90.-zero_lats), dtype = alat.dtype, chunks = (alat.chunks[0], tuple([2*len(keys['cos_T'])])))
 
     R_cos_T  =  R_T[:, :len(keys['cos_T']) ] # split

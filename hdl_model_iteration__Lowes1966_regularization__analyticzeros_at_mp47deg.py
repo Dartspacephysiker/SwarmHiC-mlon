@@ -57,7 +57,7 @@ doFINAL = False                 # Use ALL data, all model parameters
 
 
 # do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
-do_modded_model = doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
+# do_modded_model = doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
 
 # MODELVERSION = DATAVERSION+'onlyca'
 MODELVERSION = DATAVERSION+'onlyca_mV_per_m_lillambda'+MODELSUFF
@@ -72,7 +72,8 @@ if doFINAL:
         assert 2 < 0,"You have set MACHINE == 'SpencersLaptop'. You should not be using a laptop to calculate the full model coefficients."
 
 
-modded_subinds = None
+indfile = None                  # if indfile is not None, load it in
+modded_Nsubinds = None
 if dosmall:
     MODELVERSION = MODELVERSION+'small'+MODELSUFF
     indlets = slice(0,1000000,100)
@@ -102,9 +103,9 @@ elif doalldptilt:
     randomseednumber = 123
     MODELVERSION = MODELVERSION+f'Alldptilt_{randomseednumber:d}'+MODELSUFF
 elif dosouth:
-    
+    indfile = 'south_subset_array_indices.txt'
 
-if do_modded_model:
+if indfile is not None:
     print(f"Loading indices from file '{indfile}' (see journal__20210825__find_out_what_data_was_used_for_model_coeffs_based_on_slice_0_1000000_100__ie_10k_total_points.py)")
     indlets = np.int64(np.loadtxt(masterhdfdir+indfile))
     print(f"Got {len(indlets)} indices from file '{indfile}'")
@@ -255,7 +256,7 @@ datamap = dict(zip(names, range(len(names))))
 
 # breakpoint()
 
-if do_modded_model:
+if indfile is not None:
     data = da.vstack((da.from_array(f[name][()][indlets], chunks = CHUNKSIZE) for name in names))
 else:
     data = da.vstack((da.from_array(f[name], chunks = CHUNKSIZE) for name in names))

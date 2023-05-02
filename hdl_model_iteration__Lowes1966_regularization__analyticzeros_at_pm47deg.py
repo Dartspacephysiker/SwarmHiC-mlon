@@ -41,10 +41,8 @@ elif MACHINE == 'SpencersLaptop':
 
 DATAVERSION = 'v1'
 DATAVERSION = 'v2'                                       # 2021/11/19
-datafile       = masterhdfdir+f'modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
 
-## Select which type of model
-MODELSUFF = '_analyticzero_at_47deg'
+zero_lats = np.array([47.,-47.])
 
 dosmall = False
 doonlynegbzsouth = False
@@ -52,46 +50,53 @@ doonlynegby = False
 doonlyposby = False
 doassortment = False
 doalldptilt = False
-doFINAL = True                 # Use ALL data, all model parameters
+dosouth = True
+doFINAL = False                 # Use ALL data, all model parameters
 
+## Select which type of model
+MODELSUFF = '_analyticzero_at_47deg'
+MODELSUFF = '_analyticzero_at_'+",".join([f"{this:.0f}" for this in zero_lats])+'deg'
+
+datafile       = masterhdfdir+f'modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
 
 # do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
-do_modded_model = doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
+#do_modded_model = doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
 
 # MODELVERSION = DATAVERSION+'onlyca'
-MODELVERSION = DATAVERSION+'onlyca_mV_per_m_lillambda'+MODELSUFF
+MODELVERSION = DATAVERSION+'onlyca_mV_per_m_lillambda'
 
 # 2021/11/20 TRY ALL MODEL PARAMS (still mV per m, just junking the unnecessary suffix)
-MODELVERSION = DATAVERSION+'ALLPARAMS'+MODELSUFF
+MODELVERSION = DATAVERSION+'ALLPARAMS'
 
 if doFINAL:
-    MODELVERSION = DATAVERSION+'FINAL'+MODELSUFF
+    MODELVERSION = DATAVERSION+'FINAL'
     # if MACHINE == 'KallesTower':
     if MACHINE == 'SpencersLaptop':
         assert 2 < 0,"You have set MACHINE == 'SpencersLaptop'. You should not be using a laptop to calculate the full model coefficients."
 
 
-modded_subinds = None
+indfile = None                  # if indfile is not None, load it in
+modded_Nsubinds = None
 if dosmall:
-    MODELVERSION = MODELVERSION+'small'+MODELSUFF
+    MODELVERSION = MODELVERSION+'small'
     indlets = slice(0,1000000,100)
     ninds = np.arange(indlets.start,indlets.stop,indlets.step).size
     print(f"Doing smaller version of database consisting of {ninds} indices: [{indlets.start}:{indlets.stop}:{indlets.step}]")
 elif doonlynegbzsouth:
-    MODELVERSION = MODELVERSION+'BzNegNH'+MODELSUFF
+    MODELVERSION = MODELVERSION+'BzNegNH'
     indfile = 'negbz_array_indices.txt'
 elif doonlynegby:
-    MODELVERSION = MODELVERSION+'ByNeg'+MODELSUFF
+    MODELVERSION = MODELVERSION+'ByNeg'
     indfile = 'negby_array_indices.txt'
 elif doonlyposby:
-    MODELVERSION = MODELVERSION+'ByPos'+MODELSUFF
+    MODELVERSION = MODELVERSION+'ByPos'
     indfile = 'posby_array_indices.txt'
 elif doassortment:
     # indlets = np.where((full['mlat'].abs() >= 45 ) & \
     #                    # (full['By'] >= 0) & \
     #                    (np.abs(full['tilt']) <= 10) & \
     #                    ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
-    MODELVERSION = MODELVERSION+'Sortiment'+MODELSUFF
+    MODELVERSION = MODELVERSION+'Sortiment'
     indfile = 'sortiment_array_indices.txt'
     modded_Nsubinds = 300000
 elif doalldptilt:
@@ -99,9 +104,14 @@ elif doalldptilt:
     indfile = 'alldptilt_array_indices.txt'
     modded_Nsubinds = 900000
     randomseednumber = 123
-    MODELVERSION = MODELVERSION+f'Alldptilt_{randomseednumber:d}'+MODELSUFF
+    MODELVERSION = MODELVERSION+f'Alldptilt_{randomseednumber:d}'
+elif dosouth:
+    indfile = 'south_subset_array_indices.txt'
+    MODELVERSION = MODELVERSION+f'south_subset'
 
-if do_modded_model:
+MODELVERSION = MODELVERSION + MODELSUFF
+
+if indfile is not None:
     print(f"Loading indices from file '{indfile}' (see journal__20210825__find_out_what_data_was_used_for_model_coeffs_based_on_slice_0_1000000_100__ie_10k_total_points.py)")
     indlets = np.int64(np.loadtxt(masterhdfdir+indfile))
     print(f"Got {len(indlets)} indices from file '{indfile}'")
@@ -114,6 +124,10 @@ if do_modded_model:
 
 print("******************************")
 print(f"MODEL VERSION: {MODELVERSION}")
+print(f"Data file    : {datafile}")
+if indfile is not None:
+    print(f"indfile      : {indfile}")    
+    print(f"ninds        : {len(indlets)}")    
 print("******************************")
 print("")
 
@@ -252,119 +266,33 @@ datamap = dict(zip(names, range(len(names))))
 
 # breakpoint()
 
-if do_modded_model:
+if indfile is not None:
     data = da.vstack((da.from_array(f[name][()][indlets], chunks = CHUNKSIZE) for name in names))
 else:
     data = da.vstack((da.from_array(f[name], chunks = CHUNKSIZE) for name in names))
 ND = data.size/len(datamap) # number of datapoints
 print( '%s - loaded data - %s points across %s arrays (dt = %.1f sec)' % (time.ctime(), ND, len(datamap), time.time() - t0))
 
-# G0 = getG_torapex_dask(NT, MT, NV, MV,
-#                        data[datamap['qdlat'  ]].reshape((data.shape[1], 1)),
-#                        data[datamap['alat110']].reshape((data.shape[1], 1)),
-#                    15* data[datamap['mlt'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['h'      ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f1e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f1n'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f2e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['f2n'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d1e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d1n'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d2e'    ]].reshape((data.shape[1], 1)),
-#                        data[datamap['d2n'    ]].reshape((data.shape[1], 1)))
-# We don't need the poloidal stuff
 import warnings
 # warnings.warn("You have not modified getG_torapex_dask to make sure that you're calculating the right stuff!")
 # warnings.warn("2021/09/01 You have modified getG_torapex_dask so that RR is left in km (and hopefully potential in kV)!")
 warnings.warn("2021/09/01 You have modified getG_torapex_dask so that coeffs have units mV/m (I hope!)")
 # warnings.warn("2021/09/02 Kalle says regularization is currently based on magnetic energy integrated over the entire globe/sphere. This can't be right for the electric potential, so we need to think about it. ('Vi må heller tenke på hva våre antagelser om potensialet er, og formulere dette matematisk (ikke lett!)')")
 
-NT,MT = 65,3
-
-# assert 2<0
-# print("ENTERING THE NOTE ZONE")
-# from utils import getG_torapex_dask_analyticzeros,SHkeys,get_legendre_arrays,get_P_Q_and_R_arrays, get_R_arrays
-# import numpy as np
-# import dask.array as da
-
-# # zero_keys = {} # dictionary of spherical harmonic keys
-# # zero_keys['cos_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(0)
-# # zero_keys['sin_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(1)
-
-# keys = {} # dictionary of spherical harmonic keys
-# keys['cos_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(0)
-# keys['sin_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(1)
-
-# test_thetas = np.array([60.,70.]) # deg
-# test_thetas = test_thetas.reshape((len(test_thetas),1))
-# toroidal_minlat = 0
-# legendre_T = get_legendre_arrays(NT, MT, test_thetas, keys['cos_T'], minlat=toroidal_minlat)
-# P_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
-# dP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
-
-# zero_thetas = 90.-np.array([47., -47.]).reshape((2,1))
-# three_thetas = 90.-np.array([47., -47., 0.])
-# three_thetas = three_thetas.reshape((len(three_thetas),1))
-# zero_T = get_legendre_arrays(NT, MT, zero_thetas, keys['cos_T'], return_full_P_and_dP=True)
-# # magicP_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
-# # magicdP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
-# zero_T_P = {key:zero_T[0][key] for key in keys['cos_T']}
-# zero_T_dP = {key:zero_T[1][key] for key in keys['cos_T']}
-# #Now need to figure out how to implement Q and R functions
-
-# return_full_P_and_dP = False
-
-# dickie = get_P_Q_and_R_arrays(NT, MT, three_thetas, keys['cos_T'],
-#                               zero_thetas=zero_thetas,
-#                               return_full_P_and_dP=return_full_P_and_dP)
-# R_T = get_R_arrays(NT, MT, three_thetas, keys['cos_T'],
-#                                   zero_thetas=zero_thetas,
-#                                   return_full_P_and_dP=False)
-
-# dickiefull = get_P_Q_and_R_arrays(NT, MT, three_thetas, keys['cos_T'],
-#                                   zero_thetas=zero_thetas,
-#                                   return_full_P_and_dP=True)
-# P_cos_T  = dickie[0][:, :len(keys['cos_T']) ] # split
-# dP_cos_T = dickie[0][:, :len(keys['cos_T']) ] # split
-
-# Q_cos_T  = dickie[1][:, :len(keys['cos_T']) ] # split
-# dQ_cos_T = dickie[1][:, :len(keys['cos_T']) ] # split
-
-# R_cos_T  = dickie[2][:, :len(keys['cos_T']) ] # split
-# dR_cos_T = dickie[2][:, :len(keys['cos_T']) ] # split
-
-# magicP_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
-# magicdP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
-
-# TEST THAT LAMBDAS WHERE WE'RE SUPPOSED TO HAVE ZEROS ARE ACTUALLY ZEROS
-# dickiezero = get_P_Q_and_R_arrays(NT, MT, zero_thetas, keys['cos_T'],
-#                               zero_thetas=zero_thetas,
-#                                   # zero_keys=zero_keys['cos_T'],
-#                                   return_full_P_and_dP=True)
-
-# Pshouldnotbezero = np.array([dickiezero['P'][key][0] for key in dickiezero['P'].keys()]).ravel()
-# Qshouldbezero = np.array([dickiezero['Q'][key][0] for key in dickiezero['Q'].keys()]).ravel()
-# Rshouldbezero = np.array([dickiezero['R'][key][0] for key in dickiezero['R'].keys()]).ravel()
-# assert np.all(np.isclose(Qshouldbezero,0))
-# assert np.all(np.isclose(Rshouldbezero,0))
-#     # for key in keys['cos_T']:
-#     #     if key[0] >= 2:
-
-# print("LEAVING THE NOTE ZONE")
-
 G0 = getG_torapex_dask_analyticzeros(NT, MT, 
-                       data[datamap['mlat'           ]].reshape((data.shape[1], 1)),
-                   15* data[datamap['mlt'            ]].reshape((data.shape[1], 1)),
-                       data[datamap['Be3_in_Tesla'   ]].reshape((data.shape[1], 1)),
-                       # data[datamap['B0IGRF'         ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d10'            ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d11'            ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d22'            ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d20'            ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d21'            ]].reshape((data.shape[1], 1)),
-                       # data[datamap['d22'            ]].reshape((data.shape[1], 1)),
-                       data[datamap['lperptoB_dot_e1']].reshape((data.shape[1], 1)),
-                       data[datamap['lperptoB_dot_e2']].reshape((data.shape[1], 1)))
+                                     data[datamap['mlat'           ]].reshape((data.shape[1], 1)),
+                                     15* data[datamap['mlt'            ]].reshape((data.shape[1], 1)),
+                                     data[datamap['Be3_in_Tesla'   ]].reshape((data.shape[1], 1)),
+                                     # data[datamap['B0IGRF'         ]].reshape((data.shape[1], 1)),
+                                     # data[datamap['d10'            ]].reshape((data.shape[1], 1)),
+                                     # data[datamap['d11'            ]].reshape((data.shape[1], 1)),
+                                     # data[datamap['d22'            ]].reshape((data.shape[1], 1)),
+                                     # data[datamap['d20'            ]].reshape((data.shape[1], 1)),
+                                     # data[datamap['d21'            ]].reshape((data.shape[1], 1)),
+                                     # data[datamap['d22'            ]].reshape((data.shape[1], 1)),
+                                     data[datamap['lperptoB_dot_e1']].reshape((data.shape[1], 1)),
+                                     data[datamap['lperptoB_dot_e2']].reshape((data.shape[1], 1)),
+                                     zero_lats=zero_lats)
 
 G0 = G0.rechunk((G0.chunks[0], G0.shape[1]))
 print( '%s - done computing G0 matrix graph. G0 shape is %s (dt = %.1f sec)' % (time.ctime(), G0.shape, time.time() - t0))
@@ -515,3 +443,75 @@ make_model_coeff_txt_file_analyticzeros(coeff_fn,
                                         TRANSPOSEEM=False,
                                         PRINTOUTPUT=False)
 print( 'done. DONE!!!')
+
+# assert 2<0
+# print("ENTERING THE NOTE ZONE")
+# from utils import getG_torapex_dask_analyticzeros,SHkeys,get_legendre_arrays,get_P_Q_and_R_arrays, get_R_arrays
+# import numpy as np
+# import dask.array as da
+
+# # zero_keys = {} # dictionary of spherical harmonic keys
+# # zero_keys['cos_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(0)
+# # zero_keys['sin_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(1)
+
+# keys = {} # dictionary of spherical harmonic keys
+# keys['cos_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(0)
+# keys['sin_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(1)
+
+# test_thetas = np.array([60.,70.]) # deg
+# test_thetas = test_thetas.reshape((len(test_thetas),1))
+# toroidal_minlat = 0
+# legendre_T = get_legendre_arrays(NT, MT, test_thetas, keys['cos_T'], minlat=toroidal_minlat)
+# P_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
+# dP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
+
+# zero_thetas = 90.-np.array([47., -47.]).reshape((2,1))
+# three_thetas = 90.-np.array([47., -47., 0.])
+# three_thetas = three_thetas.reshape((len(three_thetas),1))
+# zero_T = get_legendre_arrays(NT, MT, zero_thetas, keys['cos_T'], return_full_P_and_dP=True)
+# # magicP_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
+# # magicdP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
+# zero_T_P = {key:zero_T[0][key] for key in keys['cos_T']}
+# zero_T_dP = {key:zero_T[1][key] for key in keys['cos_T']}
+# #Now need to figure out how to implement Q and R functions
+
+# return_full_P_and_dP = False
+
+# dickie = get_P_Q_and_R_arrays(NT, MT, three_thetas, keys['cos_T'],
+#                               zero_thetas=zero_thetas,
+#                               return_full_P_and_dP=return_full_P_and_dP)
+# R_T = get_R_arrays(NT, MT, three_thetas, keys['cos_T'],
+#                                   zero_thetas=zero_thetas,
+#                                   return_full_P_and_dP=False)
+
+# dickiefull = get_P_Q_and_R_arrays(NT, MT, three_thetas, keys['cos_T'],
+#                                   zero_thetas=zero_thetas,
+#                                   return_full_P_and_dP=True)
+# P_cos_T  = dickie[0][:, :len(keys['cos_T']) ] # split
+# dP_cos_T = dickie[0][:, :len(keys['cos_T']) ] # split
+
+# Q_cos_T  = dickie[1][:, :len(keys['cos_T']) ] # split
+# dQ_cos_T = dickie[1][:, :len(keys['cos_T']) ] # split
+
+# R_cos_T  = dickie[2][:, :len(keys['cos_T']) ] # split
+# dR_cos_T = dickie[2][:, :len(keys['cos_T']) ] # split
+
+# magicP_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
+# magicdP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
+
+# TEST THAT LAMBDAS WHERE WE'RE SUPPOSED TO HAVE ZEROS ARE ACTUALLY ZEROS
+# dickiezero = get_P_Q_and_R_arrays(NT, MT, zero_thetas, keys['cos_T'],
+#                               zero_thetas=zero_thetas,
+#                                   # zero_keys=zero_keys['cos_T'],
+#                                   return_full_P_and_dP=True)
+
+# Pshouldnotbezero = np.array([dickiezero['P'][key][0] for key in dickiezero['P'].keys()]).ravel()
+# Qshouldbezero = np.array([dickiezero['Q'][key][0] for key in dickiezero['Q'].keys()]).ravel()
+# Rshouldbezero = np.array([dickiezero['R'][key][0] for key in dickiezero['R'].keys()]).ravel()
+# assert np.all(np.isclose(Qshouldbezero,0))
+# assert np.all(np.isclose(Rshouldbezero,0))
+#     # for key in keys['cos_T']:
+#     #     if key[0] >= 2:
+
+# print("LEAVING THE NOTE ZONE")
+
