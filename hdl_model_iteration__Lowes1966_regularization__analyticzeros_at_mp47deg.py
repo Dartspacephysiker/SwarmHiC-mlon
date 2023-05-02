@@ -10,7 +10,7 @@
 """
 
 # 2021/11/22 WORKS!
-# 
+# 2023/04/25 The big idea is to reduce the degree of the model by two so that it runs from NT = 2 to NT = 65 (instead of from NT = 0 to NT = 65)
 
 import numpy as np
 import dask.array as da
@@ -20,47 +20,53 @@ import h5py
 import sys
 from scipy.linalg import cholesky, cho_solve
 from dask.diagnostics import ProgressBar
-from utils import nterms, SHkeys, getG_torapex_dask, make_model_coeff_txt_file
+# from utils import nterms, SHkeys, getG_torapex_dask, make_model_coeff_txt_file
+from utils import nterms_analyticzeros, SHkeys, getG_torapex_dask_analyticzeros, make_model_coeff_txt_file_analyticzeros
 from gtg_array_utils import weighted_GTd_GTG_array, expand_GTG_and_GTd
 from functools import reduce
 # from hdl_model_iteration_helpers import itersolve, iterhuber
 
-# MACHINE = 'SpencersLaptop'
 MACHINE = 'KallesTower'
+# MACHINE = 'SpencersLaptop'
 
 assert MACHINE in ['KallesTower','SpencersLaptop']
 
 t0 = time.time()
 
 if MACHINE == 'KallesTower':
+    # Directory where SHEIC/SWIPE stuff is located on Kalle's machine:  /mnt/5fa6bccc-fa9d-4efc-9ddc-756f65699a0a/spencer/SHEIC
     masterhdfdir = '/scratch/spencer/SHEIC/'
 elif MACHINE == 'SpencersLaptop':
     masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
 
 DATAVERSION = 'v1'
 DATAVERSION = 'v2'                                       # 2021/11/19
-datafile    = masterhdfdir+f'modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
+datafile       = masterhdfdir+f'modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
 
 ## Select which type of model
+MODELSUFF = '_analyticzero_at_-47deg'
+
 dosmall = False
 doonlynegbzsouth = False
 doonlynegby = False
 doonlyposby = False
 doassortment = False
 doalldptilt = False
-doFINAL = True                 # Use ALL data, all model parameters
+dosouth = True
+doFINAL = False                 # Use ALL data, all model parameters
 
 
-do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
+# do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
+do_modded_model = doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
 
 # MODELVERSION = DATAVERSION+'onlyca'
-MODELVERSION = DATAVERSION+'onlyca_mV_per_m_lillambda'
+MODELVERSION = DATAVERSION+'onlyca_mV_per_m_lillambda'+MODELSUFF
 
 # 2021/11/20 TRY ALL MODEL PARAMS (still mV per m, just junking the unnecessary suffix)
-MODELVERSION = DATAVERSION+'ALLPARAMS'
+MODELVERSION = DATAVERSION+'ALLPARAMS'+MODELSUFF
 
 if doFINAL:
-    MODELVERSION = DATAVERSION+'FINAL'
+    MODELVERSION = DATAVERSION+'FINAL'+MODELSUFF
     # if MACHINE == 'KallesTower':
     if MACHINE == 'SpencersLaptop':
         assert 2 < 0,"You have set MACHINE == 'SpencersLaptop'. You should not be using a laptop to calculate the full model coefficients."
@@ -68,25 +74,25 @@ if doFINAL:
 
 modded_subinds = None
 if dosmall:
-    MODELVERSION = MODELVERSION+'small'
+    MODELVERSION = MODELVERSION+'small'+MODELSUFF
     indlets = slice(0,1000000,100)
     ninds = np.arange(indlets.start,indlets.stop,indlets.step).size
     print(f"Doing smaller version of database consisting of {ninds} indices: [{indlets.start}:{indlets.stop}:{indlets.step}]")
 elif doonlynegbzsouth:
-    MODELVERSION = MODELVERSION+'BzNegNH'
+    MODELVERSION = MODELVERSION+'BzNegNH'+MODELSUFF
     indfile = 'negbz_array_indices.txt'
 elif doonlynegby:
-    MODELVERSION = MODELVERSION+'ByNeg'
+    MODELVERSION = MODELVERSION+'ByNeg'+MODELSUFF
     indfile = 'negby_array_indices.txt'
 elif doonlyposby:
-    MODELVERSION = MODELVERSION+'ByPos'
+    MODELVERSION = MODELVERSION+'ByPos'+MODELSUFF
     indfile = 'posby_array_indices.txt'
 elif doassortment:
     # indlets = np.where((full['mlat'].abs() >= 45 ) & \
     #                    # (full['By'] >= 0) & \
     #                    (np.abs(full['tilt']) <= 10) & \
     #                    ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
-    MODELVERSION = MODELVERSION+'Sortiment'
+    MODELVERSION = MODELVERSION+'Sortiment'+MODELSUFF
     indfile = 'sortiment_array_indices.txt'
     modded_Nsubinds = 300000
 elif doalldptilt:
@@ -94,7 +100,9 @@ elif doalldptilt:
     indfile = 'alldptilt_array_indices.txt'
     modded_Nsubinds = 900000
     randomseednumber = 123
-    MODELVERSION = MODELVERSION+f'Alldptilt_{randomseednumber:d}'
+    MODELVERSION = MODELVERSION+f'Alldptilt_{randomseednumber:d}'+MODELSUFF
+elif dosouth:
+    
 
 if do_modded_model:
     print(f"Loading indices from file '{indfile}' (see journal__20210825__find_out_what_data_was_used_for_model_coeffs_based_on_slice_0_1000000_100__ie_10k_total_points.py)")
@@ -112,14 +120,19 @@ print(f"MODEL VERSION: {MODELVERSION}")
 print("******************************")
 print("")
 
+prefix_GTd_GTG_fn    = masterhdfdir+'matrices/model_'+MODELVERSION+'GTG_GTd_array_iteration_'
+prefix_model_fn      = masterhdfdir+'matrices/model_'+MODELVERSION+'_iteration_'
+prefix_model_value   = masterhdfdir+'matrices/model_'+MODELVERSION+'_values_iteration_'
+prefix_huber_weights = masterhdfdir+'matrices/model_'+MODELVERSION+'_huber_iteration_'
+
+
 """ MODEL/CALCULATION PARAMETERS """
 i = -1 # number for previous iteration
 
 NT, MT = 65, 3
-NT, MT = 60, 5
 # NV, MV = 45, 3
 NV, MV = 0, 0
-NEQ = nterms(NT, MT, NV, MV)
+NEQ = nterms_analyticzeros(NT, MT, NV, MV)
 
 if doFINAL:
     NWEIGHTS = 19
@@ -141,16 +154,6 @@ print(f"NWEIGHTS, CHUNKSIZE: {NWEIGHTS}, {CHUNKSIZE}")
 K = 5 # how many chunks shall be calculated at once
 
 N_NUM = NEQ*(NEQ+1)//2*NWEIGHTS*(NWEIGHTS+1)//2 + NEQ*NWEIGHTS # number of unique elements in GTG and GTd (derived quantity - do not change)
-
-
-"""OUTPUT PREFIXES"""
-
-NTMTstring = f'_NT,MT{NT},{MT}'
-
-prefix_GTd_GTG_fn    = masterhdfdir+'matrices/GTG_GTd_array_iteration_'
-prefix_model_fn      = masterhdfdir+'matrices/model_'+MODELVERSION+NTMTstring+'_iteration_'
-prefix_model_value   = masterhdfdir+'matrices/model_'+MODELVERSION+NTMTstring+'_values_iteration_'
-prefix_huber_weights = masterhdfdir+'matrices/model_'+MODELVERSION+NTMTstring+'_huber_iteration_'
 
 
 """ HELPER FUNCTIONS """
@@ -200,7 +203,7 @@ def itersolve(filename):
     # lambda_T = 1.e5
     lambda_T = 1.e4
 
-    lambda_T = 1.e3
+    lambda_T = 1.e2
     
     while True:
         # print( 'solving... with lambda_T = %s, lambda_V = %s' % (lambda_T, lambda_V))
@@ -208,8 +211,8 @@ def itersolve(filename):
         try:
             # n_cos_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(0).n
             # n_sin_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(1).n
-            n_cos_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(0).n
-            n_sin_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(1).n
+            n_cos_T = SHkeys(NT, MT).setNmin(2).MleN().Mge(0).n
+            n_sin_T = SHkeys(NT, MT).setNmin(2).MleN().Mge(1).n
             GTd_GTG_num = np.load(filename)
             GTd, GTG = expand_GTG_and_GTd(GTd_GTG_num, NWEIGHTS, NEQ)
             
@@ -226,9 +229,9 @@ def itersolve(filename):
             
             c = cholesky(GTG + R, overwrite_a = True, check_finite = False)
             model_vector = cho_solve((c, 0), GTd)
-            break  # success!
+            break # success!
         except:
-            lambda_T *= np.sqrt(10)   # increase regularization parameter by a factor of sqrt(10)
+            lambda_T *= 5 # increase regularization parameter by a factor of five
             gc.collect()
             continue
 
@@ -276,10 +279,83 @@ print( '%s - loaded data - %s points across %s arrays (dt = %.1f sec)' % (time.c
 import warnings
 # warnings.warn("You have not modified getG_torapex_dask to make sure that you're calculating the right stuff!")
 # warnings.warn("2021/09/01 You have modified getG_torapex_dask so that RR is left in km (and hopefully potential in kV)!")
-# warnings.warn("2021/09/01 You have modified getG_torapex_dask so that coeffs have units mV/m (I hope!)")
+warnings.warn("2021/09/01 You have modified getG_torapex_dask so that coeffs have units mV/m (I hope!)")
 # warnings.warn("2021/09/02 Kalle says regularization is currently based on magnetic energy integrated over the entire globe/sphere. This can't be right for the electric potential, so we need to think about it. ('Vi må heller tenke på hva våre antagelser om potensialet er, og formulere dette matematisk (ikke lett!)')")
 
-G0 = getG_torapex_dask(NT, MT, 
+NT,MT = 65,3
+
+# assert 2<0
+# print("ENTERING THE NOTE ZONE")
+# from utils import getG_torapex_dask_analyticzeros,SHkeys,get_legendre_arrays,get_P_Q_and_R_arrays, get_R_arrays
+# import numpy as np
+# import dask.array as da
+
+# # zero_keys = {} # dictionary of spherical harmonic keys
+# # zero_keys['cos_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(0)
+# # zero_keys['sin_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(1)
+
+# keys = {} # dictionary of spherical harmonic keys
+# keys['cos_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(0)
+# keys['sin_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(1)
+
+# test_thetas = np.array([60.,70.]) # deg
+# test_thetas = test_thetas.reshape((len(test_thetas),1))
+# toroidal_minlat = 0
+# legendre_T = get_legendre_arrays(NT, MT, test_thetas, keys['cos_T'], minlat=toroidal_minlat)
+# P_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
+# dP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
+
+# zero_thetas = 90.-np.array([47., -47.]).reshape((2,1))
+# three_thetas = 90.-np.array([47., -47., 0.])
+# three_thetas = three_thetas.reshape((len(three_thetas),1))
+# zero_T = get_legendre_arrays(NT, MT, zero_thetas, keys['cos_T'], return_full_P_and_dP=True)
+# # magicP_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
+# # magicdP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
+# zero_T_P = {key:zero_T[0][key] for key in keys['cos_T']}
+# zero_T_dP = {key:zero_T[1][key] for key in keys['cos_T']}
+# #Now need to figure out how to implement Q and R functions
+
+# return_full_P_and_dP = False
+
+# dickie = get_P_Q_and_R_arrays(NT, MT, three_thetas, keys['cos_T'],
+#                               zero_thetas=zero_thetas,
+#                               return_full_P_and_dP=return_full_P_and_dP)
+# R_T = get_R_arrays(NT, MT, three_thetas, keys['cos_T'],
+#                                   zero_thetas=zero_thetas,
+#                                   return_full_P_and_dP=False)
+
+# dickiefull = get_P_Q_and_R_arrays(NT, MT, three_thetas, keys['cos_T'],
+#                                   zero_thetas=zero_thetas,
+#                                   return_full_P_and_dP=True)
+# P_cos_T  = dickie[0][:, :len(keys['cos_T']) ] # split
+# dP_cos_T = dickie[0][:, :len(keys['cos_T']) ] # split
+
+# Q_cos_T  = dickie[1][:, :len(keys['cos_T']) ] # split
+# dQ_cos_T = dickie[1][:, :len(keys['cos_T']) ] # split
+
+# R_cos_T  = dickie[2][:, :len(keys['cos_T']) ] # split
+# dR_cos_T = dickie[2][:, :len(keys['cos_T']) ] # split
+
+# magicP_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
+# magicdP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
+
+# TEST THAT LAMBDAS WHERE WE'RE SUPPOSED TO HAVE ZEROS ARE ACTUALLY ZEROS
+# dickiezero = get_P_Q_and_R_arrays(NT, MT, zero_thetas, keys['cos_T'],
+#                               zero_thetas=zero_thetas,
+#                                   # zero_keys=zero_keys['cos_T'],
+#                                   return_full_P_and_dP=True)
+
+# Pshouldnotbezero = np.array([dickiezero['P'][key][0] for key in dickiezero['P'].keys()]).ravel()
+# Qshouldbezero = np.array([dickiezero['Q'][key][0] for key in dickiezero['Q'].keys()]).ravel()
+# Rshouldbezero = np.array([dickiezero['R'][key][0] for key in dickiezero['R'].keys()]).ravel()
+# assert np.all(np.isclose(Qshouldbezero,0))
+# assert np.all(np.isclose(Rshouldbezero,0))
+#     # for key in keys['cos_T']:
+#     #     if key[0] >= 2:
+
+# print("LEAVING THE NOTE ZONE")
+
+G0 = getG_torapex_dask_analyticzeros(NT, MT, 
                        data[datamap['mlat'           ]].reshape((data.shape[1], 1)),
                    15* data[datamap['mlt'            ]].reshape((data.shape[1], 1)),
                        data[datamap['Be3_in_Tesla'   ]].reshape((data.shape[1], 1)),
@@ -291,7 +367,8 @@ G0 = getG_torapex_dask(NT, MT,
                        # data[datamap['d21'            ]].reshape((data.shape[1], 1)),
                        # data[datamap['d22'            ]].reshape((data.shape[1], 1)),
                        data[datamap['lperptoB_dot_e1']].reshape((data.shape[1], 1)),
-                       data[datamap['lperptoB_dot_e2']].reshape((data.shape[1], 1)))
+                                     data[datamap['lperptoB_dot_e2']].reshape((data.shape[1], 1)),
+                                     zero_lats=np.array([-47.,47.]))
 
 G0 = G0.rechunk((G0.chunks[0], G0.shape[1]))
 print( '%s - done computing G0 matrix graph. G0 shape is %s (dt = %.1f sec)' % (time.ctime(), G0.shape, time.time() - t0))
@@ -436,9 +513,9 @@ while True: # enter loop
     
 
 coeff_fn = prefix_model_fn + str(i) + '.npy'
-make_model_coeff_txt_file(coeff_fn,
-                          NT=NT,MT=MT,
-                          NV=NV,MV=MV,
-                          TRANSPOSEEM=False,
-                          PRINTOUTPUT=False)
+make_model_coeff_txt_file_analyticzeros(coeff_fn,
+                                        NT=NT,MT=MT,
+                                        NV=NV,MV=MV,
+                                        TRANSPOSEEM=False,
+                                        PRINTOUTPUT=False)
 print( 'done. DONE!!!')

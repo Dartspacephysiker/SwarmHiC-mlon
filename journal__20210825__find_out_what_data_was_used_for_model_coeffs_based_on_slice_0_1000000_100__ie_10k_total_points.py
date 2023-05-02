@@ -1,7 +1,18 @@
 import h5py
 import pandas as pd
 import numpy as np
-masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
+
+MACHINE = 'KallesTower'
+# MACHINE = 'SpencersLaptop'
+
+assert MACHINE in ['KallesTower','SpencersLaptop']
+
+if MACHINE == 'KallesTower':
+    # Directory where SHEIC/SWIPE stuff is located on Kalle's machine:  /mnt/5fa6bccc-fa9d-4efc-9ddc-756f65699a0a/spencer/SHEIC
+    masterhdfdir = '/scratch/spencer/SHEIC/'
+elif MACHINE == 'SpencersLaptop':
+    masterhdfdir = '/SPENCEdata/Research/database/SHEIC/'
+
 # DATAVERSION = 'v1'
 DATAVERSION = 'v2'                                       # 2021/11/19
 inputfile       = f'modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
@@ -59,6 +70,7 @@ outindfile = 'negby_array_indices.txt'
 outindfile = 'posby_array_indices.txt'
 outindfile = 'sortiment_array_indices.txt'
 outindfile = 'alldptilt_array_indices.txt'
+outindfile = 'south_subset_array_indices.txt'
 
 # if do_getsubinds:
 #     if outindfile == 'negbz_array_indices.txt':
@@ -187,7 +199,7 @@ full['sat_identifier'] = full['sat'].map(satmap)
 full['time'] = np.float64(full['time'].values)
 
 # Sub index for making model
-breakpoint()
+# breakpoint()
 if do_getsubinds:
     if outindfile == 'negbz_array_indices.txt':
         indlets = np.where((full['mlat'] > 0 ) & \
@@ -221,6 +233,13 @@ if do_getsubinds:
                            # (np.abs(full['tilt']) <= 10) & \
                            ((full['f107obs'] >= np.quantile(full['f107obs'],0.25)) & (full['f107obs'] <= np.quantile(full['f107obs'],0.75))))[0]
 
+    elif outindfile == 'south_subset_array_indices.txt':
+        indlets = np.where( full['mlat'] <= -45)[0]
+        randomseednumber = 123
+        modded_Nsubinds = 30000
+        print(f"Trimming indices by grabbing {modded_Nsubinds} random indices")
+        np.random.seed(randomseednumber)
+        indlets = np.random.choice(indlets,modded_Nsubinds,replace=False)
     else:
         assert 2<0
 
@@ -231,6 +250,7 @@ if do_getsubinds:
     print(f"Saving {len(indlets)} indices to outindfile '{outindfile}'")
     np.savetxt(masterhdfdir+outindfile,indlets,fmt='%d')
 
+breakpoint()
 
 # First verify that we got the right guys
 indies2 = slice(0,1000000,100)
