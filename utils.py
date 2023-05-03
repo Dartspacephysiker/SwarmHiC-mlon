@@ -837,6 +837,35 @@ def get_R_arrays(nmax, mmax, theta, keys,
 
     return np.hstack((Rmat, dRmat))
 
+
+def get_R_arrays__symm(nmax, mmax, theta, keys,
+                       zero_thetas = 90.-np.array([47.,-47.]),
+                       schmidtnormalize = True,
+                       negative_m = False,
+                       minlat = 0,
+                       return_full_P_and_dP=False):
+    """ get_R_arrays, but make everything 
+    """
+
+    zeros_0 = zero_thetas
+    zeros_1 = 90.+(90.-zero_thetas)
+    R_T0 = get_R_arrays(nmax, mmax, theta, keys,
+                        zero_thetas = zeros_0,
+                        schmidtnormalize = schmidtnormalize,
+                        negative_m = negative_m,
+                        minlat = minlat,
+                        return_full_P_and_dP=return_full_P_and_dP)
+
+    R_T1 = get_R_arrays(nmax, mmax, theta, keys,
+                        zero_thetas = zeros_1,
+                        schmidtnormalize = schmidtnormalize,
+                        negative_m = negative_m,
+                        minlat = minlat,
+                        return_full_P_and_dP=return_full_P_and_dP)
+
+
+    return (R_T0+R_T1)//2
+
 # def getG_poltorapex_dask(NT, MT, NV, MV, qlat, alat, phi, h, f1e, f1n, f2e, f2n, d1e, d1n, d2e, d2n, RR = REFRE, makenoise = False, toroidal_minlat = 0):
 #     """ all input arrays should be dask arrays with shape (N, 1), and with the same chunksize. """
 #     gc.collect()
@@ -1078,6 +1107,75 @@ def getG_torapex_dask_analyticzeros(NT, MT, alat, phi,
     R_T = alat.map_blocks(lambda x: get_R_arrays(NT, MT, 90 - x, keys['cos_T'],
                                                  minlat = toroidal_minlat,
                                                  zero_thetas = 90.-zero_lats), dtype = alat.dtype, chunks = (alat.chunks[0], tuple([2*len(keys['cos_T'])])))
+
+    R_cos_T  =  R_T[:, :len(keys['cos_T']) ] # split
+    #NOTE: algorithm used by get_legendre_arrays within get_R_arrays calculates dP^m_n/dθ, but we wish
+    #      to instead calculate dP^m_n/dλ = -dP^m_n/dθ and dR^m_n/dλ = -dR^m_n/dθ. Hence the application of a 
+    #      negative sign to dR^m_n here.
+
+    # Multiply by -1 because we want dR/dλ = -dR/dθ, and get_R_arrays calculates dR/dθ.
+    dR_cos_T = -R_T[:,  len(keys['cos_T']):]
+
+    if makenoise: print( 'R, dR cos_T size and chunks', R_cos_T.shape, dR_cos_T.shape)#, R_cos_T.chunks, dR_cos_T.chunks
+    R_sin_T  =  R_cos_T[ :, keys['cos_T'].m.flatten() != 0] 
+    dR_sin_T =  dR_cos_T[:, keys['cos_T'].m.flatten() != 0]
+
+    if makenoise: print( 'R, dR sin_T size and chunks', R_sin_T.shape, dR_sin_T.shape, R_sin_T.chunks[0], dR_sin_T.chunks[1])
+
+    # trig matrices:
+    cos_T  =  da.cos(phi * d2r * m_cos_T)#.rechunk((phi.chunks[0], m_cos_T.shape[1]))
+    sin_T  =  da.sin(phi * d2r * m_sin_T)#.rechunk((phi.chunks[0], m_sin_T.shape[1]))
+
+    dcos_T = -da.sin(phi * d2r * m_cos_T)#.rechunk((phi.chunks[0], m_cos_T.shape[1]))
+    dsin_T =  da.cos(phi * d2r * m_sin_T)#.rechunk((phi.chunks[0], m_sin_T.shape[1]))
+
+    if makenoise: print( cos_T.shape, sin_T.shape)
+
+    cos_alat   = da.cos(alat * d2r)
+
+    sinI  = 2 * da.sin( alat * d2r )/da.sqrt(4 - 3*cos_alat**2)
+
+    R = (RR + apex_ref_height)                   # DON'T convert from km to m; this way potential is in kV
+
+    # matrices with partial derivatives in MA coordinates:
+    dT_dalon  = da.hstack(( R_cos_T * dcos_T * m_cos_T,  R_sin_T * dsin_T * m_sin_T))
+    dT_dalat  = da.hstack((dR_cos_T *  cos_T          , dR_sin_T *  sin_T          ))
+
+    # Divide by a thousand so that model coeffs are in mV/m
+    lperptoB_dot_vperptoB = RR/(R * Be3_in_Tesla * 1000) * (lperptoB_dot_e2 / cos_alat * dT_dalon + \
+                                                            lperptoB_dot_e1 / sinI     * dT_dalat)
+
+    G = lperptoB_dot_vperptoB
+
+    return G
+
+
+def getG_torapex_dask_analyticzeros__symm(NT, MT, alat, phi, 
+                                          Be3_in_Tesla,
+                                          lperptoB_dot_e1, lperptoB_dot_e2,
+                                          RR=REFRE,
+                                          makenoise=False,
+                                          toroidal_minlat=0,
+                                          apex_ref_height=110,
+                                          zero_lats=np.array([47.,-47.])):
+    """ all input arrays should be dask arrays with shape (N, 1), and with the same chunksize. """
+    gc.collect()
+
+    # generate spherical harmonic keys    
+    keys = {} # dictionary of spherical harmonic keys
+    keys['cos_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(0)
+    keys['sin_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(1)
+
+    m_cos_T = da.from_array(keys['cos_T'].m, chunks = keys['cos_T'].m.shape)
+    m_sin_T = da.from_array(keys['sin_T'].m, chunks = keys['sin_T'].m.shape)
+
+    if makenoise: print( m_cos_T.shape, m_sin_T.shape)
+
+    # generate Legendre matrices - first get dicts of arrays, and then stack them in the appropriate fashion
+    if makenoise: print( 'Calculating Legendre functions. alat shape and chunks:', alat.shape, alat.chunks)
+    R_T = alat.map_blocks(lambda x: get_R_arrays__symm(NT, MT, 90 - x, keys['cos_T'],
+                                                       minlat = toroidal_minlat,
+                                                       zero_thetas = 90.-zero_lats), dtype = alat.dtype, chunks = (alat.chunks[0], tuple([2*len(keys['cos_T'])])))
 
     R_cos_T  =  R_T[:, :len(keys['cos_T']) ] # split
     #NOTE: algorithm used by get_legendre_arrays within get_R_arrays calculates dP^m_n/dθ, but we wish

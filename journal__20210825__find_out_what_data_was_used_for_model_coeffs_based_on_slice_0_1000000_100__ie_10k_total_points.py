@@ -71,7 +71,7 @@ outindfile = 'posby_array_indices.txt'
 outindfile = 'sortiment_array_indices.txt'
 outindfile = 'alldptilt_array_indices.txt'
 outindfile = 'south_subset_array_indices.txt'
-outindfile = 'north_subset_array_indices.txt'
+# outindfile = 'north_subset_array_indices.txt'
 
 # if do_getsubinds:
 #     if outindfile == 'negbz_array_indices.txt':
@@ -237,7 +237,7 @@ if do_getsubinds:
     elif outindfile == 'south_subset_array_indices.txt':
         indlets = np.where( full['mlat'] <= -45)[0]
         randomseednumber = 123
-        modded_Nsubinds = 30000
+        modded_Nsubinds = 60000
         print(f"Trimming indices by grabbing {modded_Nsubinds} random indices")
         np.random.seed(randomseednumber)
         indlets = np.random.choice(indlets,modded_Nsubinds,replace=False)
@@ -245,7 +245,7 @@ if do_getsubinds:
     elif outindfile == 'north_subset_array_indices.txt':
         indlets = np.where( full['mlat'] >= 45)[0]
         randomseednumber = 123
-        modded_Nsubinds = 30000
+        modded_Nsubinds = 60000
         print(f"Trimming indices by grabbing {modded_Nsubinds} random indices")
         np.random.seed(randomseednumber)
         indlets = np.random.choice(indlets,modded_Nsubinds,replace=False)

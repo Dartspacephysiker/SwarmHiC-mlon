@@ -21,7 +21,7 @@ import sys
 from scipy.linalg import cholesky, cho_solve
 from dask.diagnostics import ProgressBar
 # from utils import nterms, SHkeys, getG_torapex_dask, make_model_coeff_txt_file
-from utils import nterms_analyticzeros, SHkeys, getG_torapex_dask_analyticzeros, make_model_coeff_txt_file_analyticzeros
+from utils import nterms_analyticzeros, SHkeys, getG_torapex_dask_analyticzeros__symm, make_model_coeff_txt_file_analyticzeros
 from gtg_array_utils import weighted_GTd_GTG_array, expand_GTG_and_GTd
 from functools import reduce
 # from hdl_model_iteration_helpers import itersolve, iterhuber
@@ -43,7 +43,6 @@ DATAVERSION = 'v1'
 DATAVERSION = 'v2'                                       # 2021/11/19
 
 zero_lats = np.array([47.,-47.])
-zero_lats = np.array([-47.,47.])
 
 dosmall = False
 doonlynegbzsouth = False
@@ -55,8 +54,8 @@ dosouth = False
 doFINAL = True                 # Use ALL data, all model parameters
 
 ## Select which type of model
-MODELSUFF = '_analyticzero_at_47deg'
-MODELSUFF = '_analyticzero_at_'+",".join([f"{this:.0f}" for this in zero_lats])+'deg'
+MODELSUFF = '_analyticzero_at_47deg__symm'
+MODELSUFF = '_analyticzero_at_'+",".join([f"{this:.0f}" for this in zero_lats])+'deg__symm'
 
 datafile       = masterhdfdir+f'modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
 
@@ -141,7 +140,7 @@ prefix_huber_weights = masterhdfdir+'matrices/model_'+MODELVERSION+'_huber_itera
 
 
 """ MODEL/CALCULATION PARAMETERS """
-i = 1 # number for previous iteration
+i = -1 # number for previous iteration
 
 NT, MT = 65, 3
 # NV, MV = 45, 3
@@ -282,17 +281,10 @@ import warnings
 warnings.warn("2021/09/01 You have modified getG_torapex_dask so that coeffs have units mV/m (I hope!)")
 # warnings.warn("2021/09/02 Kalle says regularization is currently based on magnetic energy integrated over the entire globe/sphere. This can't be right for the electric potential, so we need to think about it. ('Vi må heller tenke på hva våre antagelser om potensialet er, og formulere dette matematisk (ikke lett!)')")
 
-G0 = getG_torapex_dask_analyticzeros(NT, MT, 
+G0 = getG_torapex_dask_analyticzeros__symm(NT, MT, 
                                      data[datamap['mlat'           ]].reshape((data.shape[1], 1)),
-                                     15* data[datamap['mlt'            ]].reshape((data.shape[1], 1)),
+                                     15* data[datamap['mlt'        ]].reshape((data.shape[1], 1)),
                                      data[datamap['Be3_in_Tesla'   ]].reshape((data.shape[1], 1)),
-                                     # data[datamap['B0IGRF'         ]].reshape((data.shape[1], 1)),
-                                     # data[datamap['d10'            ]].reshape((data.shape[1], 1)),
-                                     # data[datamap['d11'            ]].reshape((data.shape[1], 1)),
-                                     # data[datamap['d22'            ]].reshape((data.shape[1], 1)),
-                                     # data[datamap['d20'            ]].reshape((data.shape[1], 1)),
-                                     # data[datamap['d21'            ]].reshape((data.shape[1], 1)),
-                                     # data[datamap['d22'            ]].reshape((data.shape[1], 1)),
                                      data[datamap['lperptoB_dot_e1']].reshape((data.shape[1], 1)),
                                      data[datamap['lperptoB_dot_e2']].reshape((data.shape[1], 1)),
                                      zero_lats=zero_lats)
@@ -446,75 +438,4 @@ make_model_coeff_txt_file_analyticzeros(coeff_fn,
                                         TRANSPOSEEM=False,
                                         PRINTOUTPUT=False)
 print( 'done. DONE!!!')
-
-# assert 2<0
-# print("ENTERING THE NOTE ZONE")
-# from utils import getG_torapex_dask_analyticzeros,SHkeys,get_legendre_arrays,get_P_Q_and_R_arrays, get_R_arrays
-# import numpy as np
-# import dask.array as da
-
-# # zero_keys = {} # dictionary of spherical harmonic keys
-# # zero_keys['cos_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(0)
-# # zero_keys['sin_T'] = SHkeys(NT, MT).setNmin(1).MleN().Mge(1)
-
-# keys = {} # dictionary of spherical harmonic keys
-# keys['cos_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(0)
-# keys['sin_T'] = SHkeys(NT, MT).setNmin(2).MleN().Mge(1)
-
-# test_thetas = np.array([60.,70.]) # deg
-# test_thetas = test_thetas.reshape((len(test_thetas),1))
-# toroidal_minlat = 0
-# legendre_T = get_legendre_arrays(NT, MT, test_thetas, keys['cos_T'], minlat=toroidal_minlat)
-# P_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
-# dP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
-
-# zero_thetas = 90.-np.array([47., -47.]).reshape((2,1))
-# three_thetas = 90.-np.array([47., -47., 0.])
-# three_thetas = three_thetas.reshape((len(three_thetas),1))
-# zero_T = get_legendre_arrays(NT, MT, zero_thetas, keys['cos_T'], return_full_P_and_dP=True)
-# # magicP_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
-# # magicdP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
-# zero_T_P = {key:zero_T[0][key] for key in keys['cos_T']}
-# zero_T_dP = {key:zero_T[1][key] for key in keys['cos_T']}
-# #Now need to figure out how to implement Q and R functions
-
-# return_full_P_and_dP = False
-
-# dickie = get_P_Q_and_R_arrays(NT, MT, three_thetas, keys['cos_T'],
-#                               zero_thetas=zero_thetas,
-#                               return_full_P_and_dP=return_full_P_and_dP)
-# R_T = get_R_arrays(NT, MT, three_thetas, keys['cos_T'],
-#                                   zero_thetas=zero_thetas,
-#                                   return_full_P_and_dP=False)
-
-# dickiefull = get_P_Q_and_R_arrays(NT, MT, three_thetas, keys['cos_T'],
-#                                   zero_thetas=zero_thetas,
-#                                   return_full_P_and_dP=True)
-# P_cos_T  = dickie[0][:, :len(keys['cos_T']) ] # split
-# dP_cos_T = dickie[0][:, :len(keys['cos_T']) ] # split
-
-# Q_cos_T  = dickie[1][:, :len(keys['cos_T']) ] # split
-# dQ_cos_T = dickie[1][:, :len(keys['cos_T']) ] # split
-
-# R_cos_T  = dickie[2][:, :len(keys['cos_T']) ] # split
-# dR_cos_T = dickie[2][:, :len(keys['cos_T']) ] # split
-
-# magicP_cos_T  =  legendre_T[:, :len(keys['cos_T']) ] # split
-# magicdP_cos_T = -legendre_T[:,  len(keys['cos_T']):]
-
-# TEST THAT LAMBDAS WHERE WE'RE SUPPOSED TO HAVE ZEROS ARE ACTUALLY ZEROS
-# dickiezero = get_P_Q_and_R_arrays(NT, MT, zero_thetas, keys['cos_T'],
-#                               zero_thetas=zero_thetas,
-#                                   # zero_keys=zero_keys['cos_T'],
-#                                   return_full_P_and_dP=True)
-
-# Pshouldnotbezero = np.array([dickiezero['P'][key][0] for key in dickiezero['P'].keys()]).ravel()
-# Qshouldbezero = np.array([dickiezero['Q'][key][0] for key in dickiezero['Q'].keys()]).ravel()
-# Rshouldbezero = np.array([dickiezero['R'][key][0] for key in dickiezero['R'].keys()]).ravel()
-# assert np.all(np.isclose(Qshouldbezero,0))
-# assert np.all(np.isclose(Rshouldbezero,0))
-#     # for key in keys['cos_T']:
-#     #     if key[0] >= 2:
-
-# print("LEAVING THE NOTE ZONE")
 
