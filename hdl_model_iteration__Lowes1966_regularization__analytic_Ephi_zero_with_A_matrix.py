@@ -27,7 +27,7 @@ from functools import reduce
 # from hdl_model_iteration_helpers import itersolve, iterhuber
 
 MACHINE = 'KallesTower'
-# MACHINE = 'SpencersLaptop'
+MACHINE = 'SpencersLaptop'
 
 assert MACHINE in ['KallesTower','SpencersLaptop']
 
@@ -141,7 +141,7 @@ prefix_huber_weights = masterhdfdir+'matrices/model_'+MODELVERSION+'_huber_itera
 
 
 """ MODEL/CALCULATION PARAMETERS """
-i = 1 # number for previous iteration
+i = -1 # number for previous iteration
 
 NT, MT = 65, 3
 NEQ = nterms_analytic_Ephi_zero(NT, MT)
@@ -429,7 +429,7 @@ while True: # enter loop
     
 
 coeff_fn = prefix_model_fn + str(i) + '.npy'
-make_model_coeff_txt_file_analyticEphi_zeros(coeff_fn,
+make_model_coeff_txt_file_analyticEphi_zero(coeff_fn,
                                         NT=NT,MT=MT,
                                         TRANSPOSEEM=False,
                                         PRINTOUTPUT=False)

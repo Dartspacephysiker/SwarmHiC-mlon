@@ -977,11 +977,13 @@ def get_A_matrix(nmax, mmax,
     
                 if n == nmax-1:
                     # do the thing for g^m_N-1
-                    tmprow[fix_columns] = -np.array([coeffs['Qtilde'][n,m] for n,m in zip(tmpn,tmpm)]).flatten()
+                    # tmprow[fix_columns] = -np.array([coeffs['Qtilde'][n,m] for n,m in zip(tmpn,tmpm)]).flatten()
+                    tmprow[fix_columns] = -np.array([Qtilde[n,m] for n,m in zip(tmpn,tmpm)]).flatten()
     
                 elif n == nmax:
                     # do the thing for g^m_N
-                    tmprow[fix_columns] = np.array([coeffs['Tcoeff'][n,m] for n,m in zip(tmpn,tmpm)]).flatten()
+                    # tmprow[fix_columns] = np.array([coeffs['Tcoeff'][n,m] for n,m in zip(tmpn,tmpm)]).flatten()
+                    tmprow[fix_columns] = np.array([Tcoeff[n,m] for n,m in zip(tmpn,tmpm)]).flatten()
     
             else:
                 tmprow = zerorow.copy()
@@ -1000,7 +1002,7 @@ def get_A_matrix(nmax, mmax,
         return A
 
 
-def get_legendre_arrays__Amatrix(nmax, mmax, theta, keys,
+def get_legendre_arrays__Amatrix(nmax, mmax, theta, keys, A,
                                  schmidtnormalize = True,
                                  negative_m = False,
                                  minlat = 0,
@@ -1026,10 +1028,6 @@ def get_legendre_arrays__Amatrix(nmax, mmax, theta, keys,
 
         theta must be a column vector (N, 1)
     """
-
-    assert len(zero_thetas) == 2
-    A = get_A_matrix(nmax, mmax,
-                     zero_thetas = zero_thetas)
 
     P = {}
     dP = {}
@@ -1413,7 +1411,11 @@ def getG_torapex_dask_analyticEphi_zero(NT, MT, alat, phi,
 
     # generate Legendre matrices - first get dicts of arrays, and then stack them in the appropriate fashion
     if makenoise: print( 'Calculating Legendre functions. alat shape and chunks:', alat.shape, alat.chunks)
-    P_T = alat.map_blocks(lambda x: get_legendre_arrays__Amatrix(NT, MT, 90 - x, fullkeys['cos_T'],
+    assert len(zero_lats) == 2
+    A = get_A_matrix(NT, MT,
+                     zero_thetas = 90.-zero_lats)
+
+    P_T = alat.map_blocks(lambda x: get_legendre_arrays__Amatrix(NT, MT, 90 - x, fullkeys['cos_T'], A,
                                                                  minlat = toroidal_minlat,
                                                                  zero_thetas = 90.-zero_lats,
                                                                  multiply_dP_by_neg1=True),
@@ -1429,6 +1431,7 @@ def getG_torapex_dask_analyticEphi_zero(NT, MT, alat, phi,
     # Multiply by -1 because we want dR/dλ = -dR/dθ, and get_P_arrays calculates dR/dθ.
     # dP_cos_T = -P_T[:,  len(keys['cos_T']):]
     # WAIT! Can't do this here, because you multiply by neg1 in get_legendre_arrays__Amatrix!
+    dP_cos_T = P_T[:,  len(keys['cos_T']):]
 
     if makenoise: print( 'P, dP cos_T size and chunks', P_cos_T.shape, dP_cos_T.shape)#, P_cos_T.chunks, dP_cos_T.chunks
     P_sin_T  =  P_cos_T[ :, keys['cos_T'].m.flatten() != 0] 
@@ -1963,10 +1966,11 @@ def make_model_coeff_txt_file_analyticzeros(coeff_fn,
     print("Made "+coeffdir+outfile)
     
 
-def make_model_coeff_txt_file_analyticEphi_zeros(coeff_fn,
-                                                 NT=65,MT=3,
-                                                 TRANSPOSEEM=False,
-                                                 PRINTOUTPUT=False):
+def make_model_coeff_txt_file_analyticEphi_zero(coeff_fn,
+                                                NT=65,MT=3,
+                                                TRANSPOSEEM=False,
+                                                PRINTOUTPUT=False,
+                                                zero_thetas=90.-np.array([47.,-47.])):
 
     from datetime import datetime
     import sys
@@ -1976,7 +1980,8 @@ def make_model_coeff_txt_file_analyticEphi_zeros(coeff_fn,
     Nmin = 1
 
     # NEQ = nterms_analytic_Ephi_zero(NT, MT, NV, MV, Nmin=Nmin)
-    NEQ = nterms(NT, MT, Nmin=Nmin)
+    # NEQ = nterms(NT, MT, Nmin=Nmin)
+    NEQ = nterms_analytic_Ephi_zero(NT, MT)
     
     sheicpath = '/home/spencerh/Research/SHEIC/'
     if not sheicpath in sys.path:
@@ -2027,9 +2032,9 @@ def make_model_coeff_txt_file_analyticEphi_zeros(coeff_fn,
     
     coeffs = np.load(os.path.join(coeffdir,coefffile))  # Shape should be NEQ*NWEIGHTS
 
-    A = get_A_matrix(nmax, mmax,
-                     zero_thetas = zero_thetas)
-    coeffs = A@coeffs
+    # A = get_A_matrix(NT, MT,
+    #                  zero_thetas = zero_thetas)
+    # coeffs = A@coeffs
 
     print("Coeffs array shape:", coeffs.shape[0])
     print("NEQ*NWEIGHTS      =", NEQ*NWEIGHTS)
@@ -2039,8 +2044,8 @@ def make_model_coeff_txt_file_analyticEphi_zeros(coeff_fn,
         assert 2<0,"You're going to run into trouble! coeffs in coeff_fn are wrong size"
 
     keys = {} # dictionary of spherical harmonic keys
-    keys['cos_T'] = SHkeys(NT, MT).setNmin(Nmin).MleN().Mge(0)
-    keys['sin_T'] = SHkeys(NT, MT).setNmin(Nmin).MleN().Mge(1)
+    keys['cos_T'] = SHkeys(NT, MT).setNmin(Nmin).MleN().Mge(0).Shaveoff_k_nterms_for_m_gt(2,0)
+    keys['sin_T'] = SHkeys(NT, MT).setNmin(Nmin).MleN().Mge(1).Shaveoff_k_nterms_for_m_gt(2,0)
     
     COSN = keys['cos_T'].n.ravel()
     COSM = keys['cos_T'].m.ravel()
