@@ -21,7 +21,7 @@ import sys
 from scipy.linalg import cholesky, cho_solve
 from dask.diagnostics import ProgressBar
 # from utils import nterms, SHkeys, getG_torapex_dask, make_model_coeff_txt_file
-from utils import nterms_analytic_pot_zero, SHkeys, getG_torapex_dask_analyticEphi_zero, make_model_coeff_txt_file_analyticEphi_zero
+from utils import nterms_analytic_pot_zero, SHkeys, getG_torapex_dask_analytic_pot_zero, make_model_coeff_txt_file_analyticpot_zero
 from gtg_array_utils import weighted_GTd_GTG_array, expand_GTG_and_GTd
 from functools import reduce
 # from hdl_model_iteration_helpers import itersolve, iterhuber
