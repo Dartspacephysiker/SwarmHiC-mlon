@@ -9,9 +9,6 @@
 7) go back to (2), unless ||model i + 1|| is close to ||model i||
 """
 
-# 2021/11/22 WORKS!
-# 2023/04/25 The big idea is to reduce the degree of the model by two so that it runs from NT = 2 to NT = 65 (instead of from NT = 0 to NT = 65)
-
 import numpy as np
 import dask.array as da
 import gc
@@ -20,7 +17,6 @@ import h5py
 import sys
 from scipy.linalg import cholesky, cho_solve
 from dask.diagnostics import ProgressBar
-# from utils import nterms, SHkeys, getG_torapex_dask, make_model_coeff_txt_file
 from utils import nterms_analytic_pot_zero, SHkeys, getG_torapex_dask_analytic_pot_zero, make_model_coeff_txt_file_analyticpot_zero
 from gtg_array_utils import weighted_GTd_GTG_array, expand_GTG_and_GTd
 from functools import reduce
@@ -43,7 +39,6 @@ DATAVERSION = 'v1'
 DATAVERSION = 'v2'                                       # 2021/11/19
 
 zero_lats = np.array([47.,-47.])
-zero_lats = np.array([-47.,47.])
 
 dosmall = False
 doonlynegbzsouth = False
@@ -55,10 +50,10 @@ dosouth = False
 doFINAL = True                 # Use ALL data, all model parameters
 
 ## Select which type of model
-MODELSUFF = '_analyticpotzero_at_47deg'
+#MODELSUFF = '_analyticpotzero_at_47deg'
 MODELSUFF = '_analyticpotzero_at_'+",".join([f"{this:.0f}" for this in zero_lats])+'deg'
 
-datafile       = masterhdfdir+f'modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
+datafile       = masterhdfdir+f'mlon_modeldata_{DATAVERSION}_update.hdf5' # where the data are stored (see data_preparation/07_make_model_dataset.py)
 
 # do_modded_model = dosmall or doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
 #do_modded_model = doonlynegbzsouth or doonlynegby or doonlyposby or doassortment or doalldptilt
@@ -147,8 +142,8 @@ NT, MT = 65, 3
 NEQ = nterms_analytic_pot_zero(NT, MT)
 
 if doFINAL:
-    NWEIGHTS = 19
-    CHUNKSIZE = 20 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, KALLE'S ORIG
+    NWEIGHTS = 57
+    CHUNKSIZE = 7 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, KALLE'S ORIG divided by three since three times as many model coeffs
     
 else:
 
@@ -159,7 +154,7 @@ else:
         NWEIGHTS = 1
         CHUNKSIZE = 200 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, BEEFED UP 'CAUSE ONLY ONE WEIGHT
     else:
-        NWEIGHTS = 19
+        NWEIGHTS = 57
         CHUNKSIZE = 2 * NEQ * NWEIGHTS # number of spherical harmonics times number of weights, REDUCED for my laptop
     
 print(f"NWEIGHTS, CHUNKSIZE: {NWEIGHTS}, {CHUNKSIZE}")
@@ -221,17 +216,11 @@ def itersolve(filename):
         # print( 'solving... with lambda_T = %s, lambda_V = %s' % (lambda_T, lambda_V))
         print( 'solving... with lambda_T = %s' % (lambda_T))
         try:
-            # n_cos_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(0).n
-            # n_sin_V = SHkeys(NV, MV).setNmin(1).MleN().Mge(1).n
-            n_cos_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(0).Shaveoff_last_k_nterms_for_m_gt(2,0).n
-            n_sin_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(1).Shaveoff_last_k_nterms_for_m_gt(2,0).n
+            n_cos_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(0).Shaveoff_first_k_nterms_for_m_gt(2).n
+            n_sin_T = SHkeys(NT, MT).setNmin(1).MleN().Mge(1).Shaveoff_first_k_nterms_for_m_gt(2).n
             
             GTd_GTG_num = np.load(filename)
             GTd, GTG = expand_GTG_and_GTd(GTd_GTG_num, NWEIGHTS, NEQ)
-            
-            # nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.), 
-            #                 lambda_V * n_cos_V  * (n_cos_V  + 1.)                 , lambda_V * n_sin_V  * (n_sin_V  + 1.)                 )).flatten()
-            # nn = np.hstack((lambda_T * n_cos_T  * (n_cos_T  + 1.)/(2*n_cos_T + 1.), lambda_T * n_sin_T  * (n_sin_T  + 1.)/(2*n_sin_T + 1.))).flatten()
             
             # Regularization based on total power in the electric field (Lowes, 1966)
             nn = np.hstack((lambda_T * (n_cos_T  + 1.), lambda_T  * (n_sin_T  + 1.))).flatten()
@@ -280,7 +269,7 @@ print( '%s - loaded data - %s points across %s arrays (dt = %.1f sec)' % (time.c
 
 G0 = getG_torapex_dask_analytic_pot_zero(NT, MT, 
                                          data[datamap['mlat'           ]].reshape((data.shape[1], 1)),
-                                         15* data[datamap['mlt'        ]].reshape((data.shape[1], 1)),
+                                         data[datamap['mlon'           ]].reshape((data.shape[1], 1)),
                                          data[datamap['Be3_in_Tesla'   ]].reshape((data.shape[1], 1)),
                                          data[datamap['lperptoB_dot_e1']].reshape((data.shape[1], 1)),
                                          data[datamap['lperptoB_dot_e2']].reshape((data.shape[1], 1)),
